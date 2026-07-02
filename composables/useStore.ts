@@ -195,23 +195,32 @@ interface State {
   profile: { name?: string; avatar?: string; avatarScale?: number; avatarX?: number; avatarY?: number }
 }
 
-const _shared = seedShared()
-const state = reactive<State>({
-  version: STATE_VERSION,
-  usdBrl: 5.2001,
-  displayCurrency: 'BRL',
-  transactions: [...seedTransactions(), ...seedSharedTx(_shared[0].id)],
-  investments: seedInvestments(),
-  shared: _shared,
-  checking: seedChecking(),
-  inviteVisible: true,
-  categories: { income: [...CATEGORIES.income], expense: [...CATEGORIES.expense] },
-  customMeta: {},
-  profile: {},
-})
+/** Estado em branco — todo usuário novo começa assim (sem dados de ninguém). */
+function blankState(): State {
+  return {
+    version: STATE_VERSION,
+    usdBrl: 5.2001,
+    displayCurrency: 'BRL',
+    transactions: [],
+    investments: [],
+    shared: [],
+    checking: [],
+    inviteVisible: false,
+    categories: { income: [...CATEGORIES.income], expense: [...CATEGORIES.expense] },
+    customMeta: {},
+    profile: {},
+  }
+}
+
+const state = reactive<State>(blankState())
 
 export function useStore() {
   return state
+}
+
+/** Volta a store ao estado em branco (troca de usuário / logout). */
+export function resetState() {
+  Object.assign(state, blankState())
 }
 
 /** Cópia plana (serializável) do estado — usada para persistir. */
@@ -232,8 +241,7 @@ export function applyState(parsed: any) {
   } else if (parsed.version === 'ff-v1') {
     if (parsed.profile) state.profile = parsed.profile
     if (Array.isArray(parsed.transactions)) {
-      const pessoais = parsed.transactions.filter((t: Tx) => !t.context || t.context === 'Pessoal')
-      state.transactions = [...pessoais, ...seedSharedTx(state.shared[0].id)]
+      state.transactions = parsed.transactions.filter((t: Tx) => !t.context || t.context === 'Pessoal')
     }
     if (parsed.categories) state.categories = parsed.categories
     if (parsed.customMeta) state.customMeta = parsed.customMeta
@@ -247,22 +255,37 @@ export function applyState(parsed: any) {
 }
 
 /**
- * Carrega o localStorage para dentro da store e liga a persistência local.
- * Chamado por um plugin client em `app:mounted` (após a hidratação).
+ * Ciclo de vida por usuário: cada usuário tem sua própria chave de cache
+ * (ff_state:<userId>), e a troca de usuário zera a store antes de carregar.
  */
-let hydrated = false
-export function hydrateStore() {
-  if (hydrated || !import.meta.client) return
-  hydrated = true
+let stopPersist: (() => void) | null = null
+
+export function activateUserStore(userId: string) {
+  if (!import.meta.client) return
+  stopPersist?.()
+  stopPersist = null
+  resetState()
+
+  const key = `ff_state:${userId}`
   try {
-    const raw = localStorage.getItem('ff_state')
+    let raw = localStorage.getItem(key)
+    if (!raw) {
+      // Adoção única do cache legado (sem dono): vira dados do primeiro usuário
+      // que logar nesta máquina e é removido — nunca vaza para o próximo login.
+      const legacy = localStorage.getItem('ff_state')
+      if (legacy) {
+        raw = legacy
+        localStorage.removeItem('ff_state')
+      }
+    }
     if (raw) applyState(JSON.parse(raw))
   } catch { /* ignora cache inválido */ }
-  watch(
+
+  stopPersist = watch(
     state,
     () => {
       try {
-        localStorage.setItem('ff_state', JSON.stringify(state))
+        localStorage.setItem(key, JSON.stringify(state))
       } catch (e) {
         // ex.: QuotaExceededError — não deixa a persistência quebrar por inteiro
         console.warn('[store] falha ao salvar no localStorage:', e)
@@ -270,6 +293,12 @@ export function hydrateStore() {
     },
     { deep: true },
   )
+}
+
+export function deactivateUserStore() {
+  stopPersist?.()
+  stopPersist = null
+  resetState()
 }
 
 // ---- mutações ---------------------------------------------------------------

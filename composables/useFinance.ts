@@ -108,7 +108,7 @@ export function useFinance() {
     const rows = store.investments.map((i) => {
       const aportBrl = toBrl(i.invested, i.currency)
       const atualBrl = toBrl(i.current, i.currency)
-      return { ...i, aportBrl, atualBrl, rentPct: (atualBrl / aportBrl - 1) }
+      return { ...i, aportBrl, atualBrl, rentPct: aportBrl ? atualBrl / aportBrl - 1 : 0 }
     })
     const totalInvestido = rows.reduce((a, r) => a + r.aportBrl, 0)
     const valorAtual = rows.reduce((a, r) => a + r.atualBrl, 0)
@@ -116,12 +116,12 @@ export function useFinance() {
     for (const r of rows) allocMap.set(r.type, (allocMap.get(r.type) || 0) + r.atualBrl)
     const palette = ['#6C63FF', '#00D2A0', '#4DABF7', '#FFB800', '#FF4D6D', '#A78BFA', '#8B8FA8']
     const alloc = [...allocMap.entries()].sort((a, b) => b[1] - a[1]).map(([name, v], i) => ({
-      name, value: Math.round((v / valorAtual) * 100), color: palette[i % palette.length],
+      name, value: valorAtual ? Math.round((v / valorAtual) * 100) : 0, color: palette[i % palette.length],
     }))
     return {
       totalInvestido, valorAtual,
       rentAbs: valorAtual - totalInvestido,
-      rentPct: valorAtual / totalInvestido - 1,
+      rentPct: totalInvestido ? valorAtual / totalInvestido - 1 : 0,
       rows, alloc,
     }
   })

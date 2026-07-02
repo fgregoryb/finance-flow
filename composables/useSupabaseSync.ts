@@ -1,27 +1,43 @@
 /**
  * Sincronização da store com o Supabase (tabela user_state, 1 linha por usuário).
  *
- * - Na primeira vez logado: se não houver linha no Supabase, sobe o estado atual
- *   (vindo do localStorage) — assim os dados que você já preencheu não se perdem.
- * - Se já houver linha: o Supabase é a fonte de verdade e é carregado na store.
- * - Depois, qualquer alteração é salva no Supabase (debounce) e também no
- *   localStorage (cache offline).
+ * Fluxo por usuário (SEMPRE após activateUserStore(userId)):
+ * - Se já existe linha no Supabase → ela é a fonte de verdade e é carregada.
+ * - Se não existe → sobe o estado atual (que é exclusivamente do usuário ativo,
+ *   pois a store foi zerada e carregada da chave dele antes).
+ * - Depois, alterações são salvas com debounce.
+ *
+ * stopSupabaseSync() interrompe tudo no logout/troca de usuário.
  */
 import { reactive, watch } from 'vue'
 import { useStore, applyState, snapshot } from './useStore'
 
-let started = false
+let currentUserId: string | null = null
+let stopWatch: (() => void) | null = null
 let saveTimer: any = null
 
 const syncState = reactive({ status: 'idle' as 'idle' | 'loading' | 'saving' | 'synced' | 'error', lastSaved: '' as string })
 export function useSyncStatus() { return syncState }
 
+export function stopSupabaseSync() {
+  stopWatch?.()
+  stopWatch = null
+  clearTimeout(saveTimer)
+  saveTimer = null
+  currentUserId = null
+  syncState.status = 'idle'
+  syncState.lastSaved = ''
+}
+
 export async function startSupabaseSync() {
-  if (started || !import.meta.client) return
+  if (!import.meta.client) return
   const user = useSupabaseUser()
   const supabase = useSupabaseClient()
   if (!user.value) return
-  started = true
+  const uid = user.value.id
+  if (currentUserId === uid) return // já sincronizando este usuário
+  stopSupabaseSync()
+  currentUserId = uid
   const store = useStore()
 
   syncState.status = 'loading'
@@ -29,7 +45,7 @@ export async function startSupabaseSync() {
     const { data, error } = await supabase
       .from('user_state')
       .select('data')
-      .eq('user_id', user.value.id)
+      .eq('user_id', uid)
       .maybeSingle()
 
     if (error && error.code !== 'PGRST116') throw error
@@ -37,29 +53,30 @@ export async function startSupabaseSync() {
     if (data?.data) {
       applyState(data.data) // Supabase é a fonte de verdade
     } else {
-      await push(store, supabase, user.value.id) // primeira migração: sobe o estado local
+      await push(supabase, uid) // primeiro login deste usuário: sobe o estado DELE
     }
     syncState.status = 'synced'
   } catch (e) {
     console.warn('[sync] falha ao carregar do Supabase:', e)
     syncState.status = 'error'
-    started = false
+    currentUserId = null
     return
   }
 
-  // Persiste alterações futuras (debounced). O watch é criado APÓS o applyState,
-  // então o carregamento inicial não dispara um save desnecessário.
-  watch(
+  // Persiste alterações futuras (debounced), amarradas ao uid capturado.
+  stopWatch = watch(
     store,
     () => {
       clearTimeout(saveTimer)
-      saveTimer = setTimeout(() => push(store, supabase, user.value!.id), 800)
+      saveTimer = setTimeout(() => push(supabase, uid), 800)
     },
     { deep: true },
   )
 }
 
-async function push(store: any, supabase: any, userId: string) {
+async function push(supabase: any, userId: string) {
+  // proteção extra: nunca grava na conta errada se o usuário trocou no meio
+  if (currentUserId && currentUserId !== userId) return
   syncState.status = 'saving'
   try {
     const { error } = await supabase
