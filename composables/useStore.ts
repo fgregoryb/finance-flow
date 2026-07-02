@@ -266,18 +266,13 @@ export function activateUserStore(userId: string) {
   stopPersist = null
   resetState()
 
+  // Remove o cache global legado (versão antiga): ele não tem dono e por isso
+  // vazava entre usuários. Cada usuário passa a usar SÓ a própria chave.
+  localStorage.removeItem('ff_state')
+
   const key = `ff_state:${userId}`
   try {
-    let raw = localStorage.getItem(key)
-    if (!raw) {
-      // Adoção única do cache legado (sem dono): vira dados do primeiro usuário
-      // que logar nesta máquina e é removido — nunca vaza para o próximo login.
-      const legacy = localStorage.getItem('ff_state')
-      if (legacy) {
-        raw = legacy
-        localStorage.removeItem('ff_state')
-      }
-    }
+    const raw = localStorage.getItem(key)
     if (raw) applyState(JSON.parse(raw))
   } catch { /* ignora cache inválido */ }
 
