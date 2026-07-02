@@ -1,0 +1,291 @@
+:root {
+  /* ===== FinanceFlow Design Tokens (tema claro do design entregue) ===== */
+  --bg: #F4F6FB;
+  --surface: #FFFFFF;
+  --surface-2: #FAFBFD;
+  --surface-3: #F1F3F8;
+  --border: #E6E8F0;
+  --border-soft: #EEF0F6;
+
+  --accent: #6C63FF;          /* roxo — ações principais */
+  --accent-strong: #564ee0;
+  --accent-soft: rgba(108, 99, 255, 0.12);
+
+  --success: #00D2A0;         /* verde — preenchimentos */
+  --success-text: #00A88A;    /* verde — texto */
+  --danger: #FF4D6D;          /* vermelho — preenchimentos */
+  --danger-text: #F03A5C;     /* vermelho — texto */
+  --warning: #FFB800;
+  --warning-text: #D99400;
+  --info: #4DABF7;            /* azul — USD */
+  --info-text: #2B8FE0;
+
+  --text: #1A1D27;
+  --text-2: #6B7088;
+  --text-3: #A0A3B5;
+
+  --shadow-card: 0 1px 3px rgba(20, 23, 40, 0.04);
+  --radius-card: 16px;
+  --radius-input: 10px;
+
+  --topbar-bg: rgba(244, 246, 251, 0.85);
+  --hover: #F7F8FC;
+}
+
+/* ===== Tema escuro (padrão segue o sistema) ===== */
+html[data-theme='dark'] {
+  --bg: #0F1117;
+  --surface: #1A1D27;
+  --surface-2: #1e2230;
+  --surface-3: #262a3a;
+  --border: #2E3247;
+  --border-soft: #242838;
+
+  --accent-soft: rgba(108, 99, 255, 0.22);
+  --success-text: #23e0b5;
+  --danger-text: #ff6b85;
+  --warning-text: #FFB800;
+  --info-text: #4DABF7;
+
+  --text: #F0F2FF;
+  --text-2: #9296b0;
+  --text-3: #62667f;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --topbar-bg: rgba(15, 17, 23, 0.85);
+  --hover: #222634;
+}
+html[data-theme='dark'] ::-webkit-scrollbar-thumb { background: #2E3247; }
+html[data-theme='dark'] ::-webkit-scrollbar-thumb:hover { background: #3a3f57; }
+
+* { box-sizing: border-box; }
+
+html, body, #__nuxt {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+body {
+  background: var(--bg);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #D7DAE6; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #c4c8da; }
+::-webkit-scrollbar-track { background: transparent; }
+
+a { color: inherit; }
+
+/* ===== Utilitários reutilizados nas telas ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.h3 { margin: 0; font-size: 16px; font-weight: 600; }
+
+.tab-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface-3);
+  border-radius: 9px;
+  padding: 3px;
+}
+.tab {
+  padding: 6px 13px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text-2);
+  transition: all 0.15s;
+}
+.tab.is-active { background: var(--accent); color: #fff; }
+
+.link-more {
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-input);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(108, 99, 255, 0.35);
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: #7d75ff; }
+
+.pill-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.cur-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+}
+
+@media (max-width: 900px) {
+  .app-sidebar { display: none !important; }
+}
+
+/* ===================================================================
+   Telas de autenticação (login / cadastro / recuperação)
+   Classes com prefixo auth-/brand- para não colidir com o app.
+=================================================================== */
+.auth {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.brand-panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(150deg, #6C63FF 0%, #564ee0 55%, #463bc9 100%);
+  color: #fff;
+  padding: 44px 48px;
+  display: flex;
+  flex-direction: column;
+}
+.brand-glow { position: absolute; border-radius: 50%; }
+.brand-glow-1 { width: 360px; height: 360px; background: rgba(255, 255, 255, 0.10); right: -120px; top: -120px; }
+.brand-glow-2 { width: 240px; height: 240px; background: rgba(77, 171, 247, 0.18); left: -80px; bottom: -60px; }
+
+.brand-top { display: flex; align-items: center; gap: 12px; position: relative; }
+.brand-mark {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.brand-mark.sm { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #6C63FF, #8b84ff); }
+.brand-wordmark { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.brand-wordmark.dark { color: var(--text); }
+
+.brand-center { margin: auto 0; position: relative; }
+.brand-headline { font-size: 38px; line-height: 1.12; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 18px; }
+.brand-sub { font-size: 15px; line-height: 1.6; color: rgba(255, 255, 255, 0.82); max-width: 380px; margin: 0 0 32px; }
+.brand-chart { width: 100%; max-width: 360px; height: auto; }
+.brand-foot { position: relative; }
+.brand-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 14px; border-radius: 20px;
+}
+.brand-dot { width: 7px; height: 7px; border-radius: 50%; background: #00D2A0; box-shadow: 0 0 0 3px rgba(0, 210, 160, 0.3); }
+
+.auth-form-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; }
+.auth-card { width: 100%; max-width: 380px; }
+.auth-logo-mobile { display: none; align-items: center; gap: 10px; margin-bottom: 28px; }
+
+.auth-title { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 8px; }
+.auth-subtitle { font-size: 14px; color: var(--text-2); margin: 0 0 28px; }
+
+.auth-field { display: block; margin-bottom: 18px; }
+.auth-field-label { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.auth-field-row { display: flex; align-items: center; justify-content: space-between; }
+.auth-input {
+  display: flex; align-items: center; gap: 8px;
+  height: 46px; padding: 0 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-input);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.auth-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.auth-input input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font-family: inherit; font-size: 14px; color: var(--text);
+}
+.auth-input input::placeholder { color: var(--text-3); }
+.auth-eye { border: none; background: transparent; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
+
+.auth-link { font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 600; }
+.auth-link:hover { text-decoration: underline; }
+.auth-link.strong { font-size: 14px; }
+
+.auth-error {
+  font-size: 13px; color: var(--danger-text);
+  background: rgba(255, 77, 109, 0.08); border: 1px solid rgba(255, 77, 109, 0.25);
+  border-radius: 9px; padding: 9px 12px; margin: 0 0 16px;
+}
+.auth-success {
+  font-size: 13px; color: var(--success-text);
+  background: rgba(0, 210, 160, 0.10); border: 1px solid rgba(0, 210, 160, 0.3);
+  border-radius: 9px; padding: 9px 12px; margin: 0 0 16px;
+}
+
+.auth-submit {
+  width: 100%; height: 46px; border: none; border-radius: var(--radius-input);
+  background: var(--accent); color: #fff; font-family: inherit; font-size: 14px; font-weight: 600;
+  cursor: pointer; box-shadow: 0 6px 18px rgba(108, 99, 255, 0.35); transition: background 0.15s;
+}
+.auth-submit:hover { background: #7d75ff; }
+.auth-submit:disabled { opacity: 0.7; cursor: default; }
+
+.auth-divider { display: flex; align-items: center; gap: 14px; margin: 22px 0; color: var(--text-3); font-size: 12px; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.auth-google {
+  width: 100%; height: 46px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-input); background: var(--surface);
+  font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; transition: border-color 0.15s;
+}
+.auth-google:hover { border-color: #cfd3e3; }
+
+.auth-success-ico { width: 56px; height: 56px; border-radius: 16px; background: var(--surface-3); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
+.auth-foot-text { text-align: center; font-size: 14px; color: var(--text-2); margin: 24px 0 0; }
+.auth-legal { margin-top: 32px; font-size: 12px; color: var(--text-3); }
+
+/* indicador de força de senha */
+.auth-strength { display: flex; gap: 6px; margin: 10px 0 4px; }
+.auth-strength-bar { flex: 1; height: 4px; border-radius: 3px; background: var(--surface-3); transition: background 0.2s; }
+.auth-strength-label { font-size: 11px; color: var(--text-2); }
+
+/* checkbox de termos */
+.auth-check { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; color: var(--text-2); margin: 4px 0 18px; cursor: pointer; }
+.auth-check input { margin-top: 2px; accent-color: var(--accent); width: 16px; height: 16px; }
+
+@media (max-width: 860px) {
+  .auth { grid-template-columns: 1fr; }
+  .brand-panel { display: none; }
+  .auth-logo-mobile { display: flex; }
+}
