@@ -1,6 +1,5 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
-useHead({ title: 'Nova senha · FinanceFlow' })
 
 // O usuário chega aqui pelo link do e-mail; o módulo já estabelece a sessão
 // de recuperação a partir do token na URL.

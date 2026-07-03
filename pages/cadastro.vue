@@ -1,6 +1,5 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
-useHead({ title: 'Criar conta · FinanceFlow' })
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()

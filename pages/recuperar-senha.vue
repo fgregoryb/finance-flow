@@ -1,6 +1,5 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
-useHead({ title: 'Recuperar senha · FinanceFlow' })
 
 const supabase = useSupabaseClient()
 

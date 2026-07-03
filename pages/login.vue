@@ -1,6 +1,5 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
-useHead({ title: 'Entrar · FinanceFlow' })
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()

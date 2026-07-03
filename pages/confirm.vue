@@ -1,6 +1,5 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
-useHead({ title: 'Confirmando… · FinanceFlow' })
 
 // Página de callback do OAuth / confirmação de e-mail.
 // O @nuxtjs/supabase troca o código por sessão; quando o usuário existir,

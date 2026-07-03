@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="20%" x2="100%" y2="80%">
+      <stop offset="0%" stop-color="#2E9BF0"/>
+      <stop offset="100%" stop-color="#0B3E8C"/>
+    </linearGradient>
+  </defs>
+  <!-- arco do círculo (aberto no canto superior direito, onde a seta sai) -->
+  <path d="M 428 122
+           A 196 196 0 1 0 448 296"
+        fill="none" stroke="url(#g)" stroke-width="38" stroke-linecap="round"/>
+  <!-- barras crescentes -->
+  <rect x="150" y="286" width="58" height="106" rx="6" fill="url(#g)"/>
+  <rect x="228" y="230" width="58" height="162" rx="6" fill="url(#g)"/>
+  <rect x="306" y="168" width="58" height="224" rx="6" fill="url(#g)"/>
+  <!-- swoosh da seta -->
+  <path d="M 96 414
+           C 200 424 330 330 434 196
+           L 466 234
+           L 482 118
+           L 368 140
+           L 404 172
+           C 316 286 208 372 106 380
+           Z"
+        fill="url(#g)"/>
+</svg>

@@ -7,6 +7,7 @@
  * por queries — a forma dos objetos já espelha o schema.
  */
 import { reactive, watch } from 'vue'
+import { remote } from './remote'
 
 const STATE_VERSION = 'ff-v3'
 
@@ -89,8 +90,15 @@ export function hexRgba(hex: string, a: number) {
   return `rgba(${r},${g},${b},${a})`
 }
 
-const uid = () =>
-  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2)
+// Gera sempre um UUID v4 válido (os ids agora vão para uma coluna uuid no banco).
+const uid = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 // ---- semente (planilha do usuário) ------------------------------------------
 function seedTransactions(): Tx[] {
@@ -223,9 +231,14 @@ export function resetState() {
   Object.assign(state, blankState())
 }
 
-/** Cópia plana (serializável) do estado — usada para persistir. */
+/**
+ * Cópia plana (serializável) do estado — usada para persistir no Supabase.
+ * Os lançamentos NÃO entram: agora vivem na tabela relacional `transactions`.
+ */
 export function snapshot() {
-  return JSON.parse(JSON.stringify(state))
+  const s = JSON.parse(JSON.stringify(state))
+  delete s.transactions
+  return s
 }
 
 /** Aplica um estado salvo (de localStorage ou Supabase), com migração de versão. */
@@ -296,6 +309,39 @@ export function deactivateUserStore() {
   resetState()
 }
 
+// ---- persistência de lançamentos na tabela `transactions` -------------------
+function txRow(t: Tx) {
+  return {
+    id: t.id,
+    user_id: remote.userId,
+    date: t.date,
+    description: t.desc,
+    type: t.type,
+    category: t.category,
+    currency: t.currency,
+    amount: t.amount,
+    amount_brl: t.amountBrl,
+    recurring: t.recurring,
+    notes: t.notes ?? null,
+    context: t.context || 'Pessoal',
+  }
+}
+function remoteTxInsert(t: Tx) {
+  if (!remote.client || !remote.userId) return
+  remote.client.from('transactions').insert(txRow(t))
+    .then(({ error }: any) => error && console.warn('[tx] insert falhou:', error.message))
+}
+function remoteTxUpdate(t: Tx) {
+  if (!remote.client || !remote.userId) return
+  remote.client.from('transactions').update(txRow(t)).eq('id', t.id)
+    .then(({ error }: any) => error && console.warn('[tx] update falhou:', error.message))
+}
+function remoteTxDelete(id: string) {
+  if (!remote.client || !remote.userId) return
+  remote.client.from('transactions').delete().eq('id', id)
+    .then(({ error }: any) => error && console.warn('[tx] delete falhou:', error.message))
+}
+
 // ---- mutações ---------------------------------------------------------------
 export function addTransaction(input: {
   date: string
@@ -309,7 +355,9 @@ export function addTransaction(input: {
   context?: string
 }) {
   const amountBrl = input.currency === 'USD' ? +(input.amount * state.usdBrl).toFixed(2) : input.amount
-  state.transactions.unshift({ ...input, id: uid(), amountBrl, context: input.context || 'Pessoal' })
+  const tx: Tx = { ...input, id: uid(), amountBrl, context: input.context || 'Pessoal' }
+  state.transactions.unshift(tx)
+  remoteTxInsert(tx)
 }
 
 export function editTransaction(id: string, input: {
@@ -320,11 +368,13 @@ export function editTransaction(id: string, input: {
   if (!t) return
   const amountBrl = input.currency === 'USD' ? +(input.amount * state.usdBrl).toFixed(2) : input.amount
   Object.assign(t, input, { amountBrl })
+  remoteTxUpdate(t)
 }
 
 export function removeTransaction(id: string) {
   const i = state.transactions.findIndex((t) => t.id === id)
   if (i >= 0) state.transactions.splice(i, 1)
+  remoteTxDelete(id)
 }
 
 // ---- categorias -------------------------------------------------------------
@@ -339,8 +389,14 @@ export function editCategory(kind: TxType, oldName: string, name: string, icon: 
   if (i >= 0) list[i] = name
   if (oldName !== name) delete state.customMeta[oldName]
   state.customMeta[name] = { icon, color }
-  // mantém os lançamentos coerentes
-  if (oldName !== name) state.transactions.forEach((t) => { if (t.category === oldName) t.category = name })
+  // mantém os lançamentos coerentes (memória + tabela)
+  if (oldName !== name) {
+    state.transactions.forEach((t) => { if (t.category === oldName) t.category = name })
+    if (remote.client && remote.userId) {
+      remote.client.from('transactions').update({ category: name }).eq('category', oldName)
+        .then(({ error }: any) => error && console.warn('[tx] rename categoria falhou:', error.message))
+    }
+  }
 }
 export function removeCategory(kind: TxType, name: string) {
   const list = kind === 'income' ? state.categories.income : state.categories.expense
@@ -373,8 +429,12 @@ export function editSharedAccount(id: string, input: Partial<SharedAccount>) {
 export function removeSharedAccount(id: string) {
   const i = state.shared.findIndex((x) => x.id === id)
   if (i >= 0) state.shared.splice(i, 1)
-  // remove também os lançamentos da conta
+  // remove também os lançamentos da conta (memória + tabela)
   state.transactions = state.transactions.filter((t) => t.context !== id)
+  if (remote.client && remote.userId) {
+    remote.client.from('transactions').delete().eq('context', id)
+      .then(({ error }: any) => error && console.warn('[tx] delete por conta falhou:', error.message))
+  }
 }
 export function settleAccount(id: string) {
   const a = state.shared.find((x) => x.id === id)

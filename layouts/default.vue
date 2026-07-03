@@ -16,18 +16,21 @@ const { firstName, fullName, initials, email, avatar, avatarStyle } = useProfile
 const { currency, toggle } = useDisplay()
 const supabase = useSupabaseClient()
 
-const nav = [
+// Pendências reais de contas conjuntas (convites aguardando resposta).
+const pendencias = computed(() => (store.inviteVisible ? 1 : 0))
+
+const nav = computed(() => [
   { to: '/', icon: 'dashboard', label: 'Dashboard' },
   { to: '/lancamentos', icon: 'swap', label: 'Lançamentos' },
-  { to: '/contas-conjuntas', icon: 'users', label: 'Contas Conjuntas', badge: '2' },
+  { to: '/contas-conjuntas', icon: 'users', label: 'Contas Conjuntas', badge: pendencias.value || undefined },
   { to: '/investimentos', icon: 'trending', label: 'Investimentos' },
   { to: '/relatorios', icon: 'bars', label: 'Relatórios' },
   { to: '/configuracoes', icon: 'settings', label: 'Configurações' },
-]
+])
 
 const crumb = computed(() => (route.meta.crumb as string) || 'Dashboard')
 const title = computed(() =>
-  route.path === '/' ? `Olá, ${firstName.value} 👋` : (route.meta.title as string) || 'FinanceFlow',
+  route.path === '/' ? `Olá, ${firstName.value}` : (route.meta.title as string) || 'FinanceFlow',
 )
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 
@@ -48,7 +51,7 @@ async function sair() {
     <!-- ===== SIDEBAR ===== -->
     <aside class="app-sidebar">
       <div class="brand">
-        <div class="brand-logo"><Icon name="logo" :size="19" color="#fff" :stroke="2.2" /></div>
+        <img class="brand-logo-img" src="/favicon.svg" alt="FinanceFlow" />
         <span class="brand-name">FinanceFlow</span>
       </div>
 
@@ -164,12 +167,7 @@ async function sair() {
   height: 100vh;
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 20px; }
-.brand-logo {
-  width: 34px; height: 34px; border-radius: 10px;
-  background: linear-gradient(135deg, #6C63FF, #8b84ff);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 14px rgba(108, 99, 255, 0.4);
-}
+.brand-logo-img { width: 34px; height: 34px; object-fit: contain; }
 .brand-name { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; }
 
 .account {

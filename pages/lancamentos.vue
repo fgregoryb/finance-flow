@@ -89,7 +89,7 @@ const gruposFiltrados = computed(() => {
     </div>
 
     <div v-else class="card empty">
-      <div style="font-size:40px; margin-bottom:8px">🔍</div>
+      <div class="empty-ico"><Icon name="search" :size="26" color="#8B8FA8" :stroke="1.6" /></div>
       <div class="empty-title">Nenhum lançamento encontrado</div>
       <div class="empty-sub">Ajuste os filtros ou crie um novo lançamento.</div>
       <button class="btn-primary" style="margin-top:16px" @click="abrirNovo()"><Icon name="plus" :size="17" :stroke="2.2" />Novo lançamento</button>
@@ -132,6 +132,7 @@ const gruposFiltrados = computed(() => {
 .tx-act:hover { background: var(--surface-3); }
 
 .empty { padding: 48px; text-align: center; }
+.empty-ico { width: 56px; height: 56px; border-radius: 16px; background: var(--surface-3); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; }
 .empty-title { font-size: 15px; font-weight: 600; }
 .empty-sub { font-size: 13px; color: var(--text-2); margin-top: 4px; }
 

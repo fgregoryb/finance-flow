@@ -46,24 +46,21 @@ create table if not exists public.shared_members (
   primary key (account_id, user_id)
 );
 
--- Lançamentos (receitas e despesas)
+-- Lançamentos (receitas e despesas) — formato usado pelo app (migração 0003)
 create table if not exists public.transactions (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       uuid not null references public.profiles (id) on delete cascade,
-  account_id    uuid references public.shared_accounts (id) on delete set null, -- null = pessoal
-  category_id   uuid references public.categories (id) on delete set null,
-  kind          text not null check (kind in ('income','expense')),
-  description   text not null,
-  currency      text not null default 'BRL' check (currency in ('BRL','USD')),
-  amount        numeric(14,2) not null,            -- valor na moeda original
-  amount_brl    numeric(14,2) not null,            -- valor convertido p/ BRL
-  fx_rate       numeric(10,4),                     -- cotação aplicada (se USD)
-  occurred_on   date not null default current_date,
-  recurring     boolean not null default false,
-  recurrence    text check (recurrence in ('daily','weekly','monthly','yearly')),
-  notes         text,
-  receipt_url   text,
-  created_at    timestamptz not null default now()
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  date        date not null,
+  description text not null,
+  type        text not null check (type in ('income','expense')),
+  category    text not null default 'Outros',
+  currency    text not null default 'BRL' check (currency in ('BRL','USD')),
+  amount      numeric(14,2) not null,            -- valor na moeda original
+  amount_brl  numeric(14,2) not null,            -- valor convertido p/ BRL
+  recurring   boolean not null default false,
+  notes       text,
+  context     text not null default 'Pessoal',   -- 'Pessoal' ou id da conta conjunta
+  created_at  timestamptz not null default now()
 );
 
 -- Investimentos
@@ -89,8 +86,7 @@ create table if not exists public.fx_quotes (
   fetched_at timestamptz not null default now()
 );
 
-create index if not exists idx_tx_user_date on public.transactions (user_id, occurred_on desc);
-create index if not exists idx_tx_account on public.transactions (account_id);
+create index if not exists idx_transactions_user_date on public.transactions (user_id, date desc);
 
 -- ============================================================
 -- Row Level Security
@@ -137,18 +133,10 @@ create policy "dono gerencia conta" on public.shared_accounts
 create policy "membros visíveis" on public.shared_members
   for select using (user_id = auth.uid() or public.is_account_owner(account_id));
 
--- Lançamentos: próprios OU de uma conta conjunta a que pertenço
-create policy "lançamentos acessíveis" on public.transactions
-  for select using (
-    user_id = auth.uid()
-    or (account_id is not null and public.is_account_member(account_id))
-  );
-create policy "lançar próprios" on public.transactions
-  for insert with check (user_id = auth.uid());
-create policy "editar próprios" on public.transactions
-  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
-create policy "apagar próprios" on public.transactions
-  for delete using (user_id = auth.uid());
+-- Lançamentos: cada usuário só acessa os próprios
+-- (compartilhamento por conta conjunta virá na Fase 3 da migração)
+create policy "lancamentos proprios" on public.transactions
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Cotações são leitura pública para usuários autenticados
 alter table public.fx_quotes enable row level security;
