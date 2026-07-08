@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useStore, addTransaction, editTransaction, brlCents, catMeta, type TxType, type Currency } from '~/composables/useStore'
+import { useStore, addTransaction, editTransaction, brlCents, catMeta, rateToBrl, activeCurrencies, type TxType, type Currency } from '~/composables/useStore'
 
 const open = useNovoLancamento()
 const editingId = useEditingTx()
@@ -17,13 +17,16 @@ const valor = ref<number | null>(null)
 const recorrente = ref(false)
 const frequencia = ref('Mensal')
 const notes = ref('')
+const banco = ref('') // conta corrente de origem (despesas)
 const erro = ref('')
 
 const editando = computed(() => !!editingId.value)
 const categorias = computed(() => (tipo.value === 'income' ? store.categories.income : store.categories.expense))
+// Moedas disponíveis = BRL + USD + extras ativadas em Configurações
+const moedas = computed(() => activeCurrencies())
 const conversao = computed(() => {
-  if (moeda.value !== 'USD' || !valor.value) return null
-  return valor.value * store.usdBrl
+  if (moeda.value === 'BRL' || !valor.value) return null
+  return valor.value * rateToBrl(moeda.value)
 })
 
 watch(tipo, () => { if (!editando.value) categoria.value = '' })
@@ -38,6 +41,7 @@ watch(open, (v) => {
       tipo.value = t.type; conta.value = t.context || 'Pessoal'; data.value = t.date
       desc.value = t.desc; categoria.value = t.category; moeda.value = t.currency
       valor.value = t.amount; recorrente.value = t.recurring; notes.value = t.notes || ''
+      banco.value = t.bankAccountId || ''
     }
   } else {
     reset()
@@ -51,7 +55,7 @@ function fechar() {
 }
 function reset() {
   tipo.value = 'expense'; data.value = '2026-06-23'; desc.value = ''; categoria.value = ''
-  moeda.value = 'BRL'; valor.value = null; recorrente.value = false; notes.value = ''; erro.value = ''
+  moeda.value = 'BRL'; valor.value = null; recorrente.value = false; notes.value = ''; banco.value = ''; erro.value = ''
 }
 function salvar() {
   erro.value = ''
@@ -62,6 +66,7 @@ function salvar() {
     date: data.value, desc: desc.value, type: tipo.value, category: categoria.value,
     currency: moeda.value, amount: valor.value, recurring: recorrente.value, notes: notes.value || undefined,
     context: conta.value,
+    bankAccountId: tipo.value === 'expense' && banco.value ? banco.value : undefined,
   }
   if (editingId.value) editTransaction(editingId.value, payload)
   else addTransaction(payload)
@@ -103,12 +108,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               </label>
               <label class="fld">
                 <span class="fld-label">Moeda</span>
-                <div class="seg sm">
-                  <button class="seg-btn" :class="{ on: moeda === 'BRL' }" @click="moeda = 'BRL'">BRL</button>
-                  <button class="seg-btn" :class="{ on: moeda === 'USD' }" @click="moeda = 'USD'">USD</button>
+                <div v-if="moedas.length <= 3" class="seg sm">
+                  <button v-for="m in moedas" :key="m" class="seg-btn" :class="{ on: moeda === m }" @click="moeda = m">{{ m }}</button>
                 </div>
+                <select v-else v-model="moeda" class="fld-box">
+                  <option v-for="m in moedas" :key="m" :value="m">{{ m }}</option>
+                </select>
               </label>
             </div>
+
+            <label v-if="tipo === 'expense' && store.checking.length" class="fld">
+              <span class="fld-label">Pago com (conta bancária)</span>
+              <select v-model="banco" class="fld-box">
+                <option value="">Não vincular</option>
+                <option v-for="c in store.checking" :key="c.id" :value="c.id">{{ c.bank }}</option>
+              </select>
+            </label>
 
             <label class="fld">
               <span class="fld-label">Descrição</span>
@@ -132,7 +147,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             <label class="fld">
               <span class="fld-label">Valor ({{ moeda }})</span>
               <input v-model.number="valor" type="number" min="0" step="0.01" class="fld-box fld-amount" placeholder="0,00" />
-              <span v-if="conversao" class="fld-conv">= {{ brlCents(conversao) }} · cotação R$ {{ store.usdBrl.toFixed(4) }}/USD</span>
+              <span v-if="conversao" class="fld-conv">= {{ brlCents(conversao) }} · cotação R$ {{ rateToBrl(moeda).toFixed(4) }}/{{ moeda }}</span>
             </label>
 
             <label class="fld-check">

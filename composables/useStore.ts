@@ -12,7 +12,20 @@ import { remote } from './remote'
 const STATE_VERSION = 'ff-v3'
 
 export type TxType = 'income' | 'expense'
-export type Currency = 'BRL' | 'USD'
+// Código de moeda ISO ('BRL', 'USD', 'EUR', ...). BRL e USD são nativas;
+// as demais são ativadas pelo usuário em Configurações → Moedas.
+export type Currency = string
+
+/** Catálogo de moedas adicionais (taxa → BRL editável em Configurações). */
+export const EXTRA_CURRENCIES: Record<string, { name: string; defaultRate: number }> = {
+  EUR: { name: 'Euro', defaultRate: 5.6 },
+  GBP: { name: 'Libra esterlina', defaultRate: 6.6 },
+  CAD: { name: 'Dólar canadense', defaultRate: 3.8 },
+  AUD: { name: 'Dólar australiano', defaultRate: 3.4 },
+  CHF: { name: 'Franco suíço', defaultRate: 5.8 },
+  JPY: { name: 'Iene japonês', defaultRate: 0.035 },
+  ARS: { name: 'Peso argentino', defaultRate: 0.0045 },
+}
 
 export interface Tx {
   id: string
@@ -25,7 +38,8 @@ export interface Tx {
   amountBrl: number
   recurring: boolean
   notes?: string
-  context?: string // 'Pessoal' ou nome de conta conjunta
+  context?: string // 'Pessoal' ou id de conta conjunta
+  bankAccountId?: string // conta corrente de origem do pagamento (opcional)
 }
 
 export interface Inv {
@@ -84,6 +98,16 @@ export const brlCents = (n: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(n)
 export const usd = (n: number) =>
   'US$ ' + new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(n)
+
+/** Formata um valor na moeda nativa do lançamento (BRL, USD, EUR, ...). */
+export function fmtMoney(code: Currency, n: number) {
+  if (code === 'USD') return usd(n)
+  try {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: code, minimumFractionDigits: 2 }).format(n)
+  } catch {
+    return `${code} ${n.toFixed(2)}`
+  }
+}
 export function hexRgba(hex: string, a: number) {
   const h = hex.replace('#', '')
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
@@ -200,7 +224,9 @@ interface State {
   inviteVisible: boolean
   categories: { income: string[]; expense: string[] }
   customMeta: Record<string, { icon: string; color: string }>
-  profile: { name?: string; avatar?: string; avatarScale?: number; avatarX?: number; avatarY?: number }
+  profile: { name?: string; avatar?: string; avatarScale?: number; avatarX?: number; avatarY?: number; timezone?: string }
+  /** Moedas adicionais ativadas pelo usuário (código → { enabled, taxa→BRL }). */
+  extraCurrencies: Record<string, { enabled: boolean; rate: number }>
 }
 
 /** Estado em branco — todo usuário novo começa assim (sem dados de ninguém). */
@@ -217,6 +243,7 @@ function blankState(): State {
     categories: { income: [...CATEGORIES.income], expense: [...CATEGORIES.expense] },
     customMeta: {},
     profile: {},
+    extraCurrencies: {},
   }
 }
 
@@ -324,6 +351,7 @@ function txRow(t: Tx) {
     recurring: t.recurring,
     notes: t.notes ?? null,
     context: t.context || 'Pessoal',
+    bank_account_id: t.bankAccountId ?? null,
   }
 }
 function remoteTxInsert(t: Tx) {
@@ -353,8 +381,9 @@ export function addTransaction(input: {
   recurring: boolean
   notes?: string
   context?: string
+  bankAccountId?: string
 }) {
-  const amountBrl = input.currency === 'USD' ? +(input.amount * state.usdBrl).toFixed(2) : input.amount
+  const amountBrl = +(input.amount * rateToBrl(input.currency)).toFixed(2)
   const tx: Tx = { ...input, id: uid(), amountBrl, context: input.context || 'Pessoal' }
   state.transactions.unshift(tx)
   remoteTxInsert(tx)
@@ -362,11 +391,11 @@ export function addTransaction(input: {
 
 export function editTransaction(id: string, input: {
   date: string; desc: string; type: TxType; category: string
-  currency: Currency; amount: number; recurring: boolean; notes?: string; context?: string
+  currency: Currency; amount: number; recurring: boolean; notes?: string; context?: string; bankAccountId?: string
 }) {
   const t = state.transactions.find((x) => x.id === id)
   if (!t) return
-  const amountBrl = input.currency === 'USD' ? +(input.amount * state.usdBrl).toFixed(2) : input.amount
+  const amountBrl = +(input.amount * rateToBrl(input.currency)).toFixed(2)
   Object.assign(t, input, { amountBrl })
   remoteTxUpdate(t)
 }
@@ -464,6 +493,24 @@ export function editChecking(id: string, input: Partial<CheckingAccount>) {
 export function removeChecking(id: string) {
   const i = state.checking.findIndex((x) => x.id === id)
   if (i >= 0) state.checking.splice(i, 1)
+}
+
+// ---- moedas -----------------------------------------------------------------
+/** Taxa de conversão da moeda para BRL (BRL=1, USD=cotação, extras=taxa manual). */
+export function rateToBrl(code: Currency): number {
+  if (code === 'BRL') return 1
+  if (code === 'USD') return state.usdBrl
+  return state.extraCurrencies[code]?.rate ?? EXTRA_CURRENCIES[code]?.defaultRate ?? 1
+}
+
+/** Moedas disponíveis para lançamentos: BRL + USD + extras ativadas. */
+export function activeCurrencies(): string[] {
+  return ['BRL', 'USD', ...Object.keys(EXTRA_CURRENCIES).filter((c) => state.extraCurrencies[c]?.enabled)]
+}
+
+export function setExtraCurrency(code: string, enabled: boolean, rate?: number) {
+  const cur = state.extraCurrencies[code] || { enabled: false, rate: EXTRA_CURRENCIES[code]?.defaultRate ?? 1 }
+  state.extraCurrencies[code] = { enabled, rate: rate ?? cur.rate }
 }
 
 // ---- perfil / exibição ------------------------------------------------------

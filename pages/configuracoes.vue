@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useStore, catMeta, hexRgba, setProfile, addCategory, editCategory, removeCategory, type TxType } from '~/composables/useStore'
+import { useStore, catMeta, hexRgba, setProfile, addCategory, editCategory, removeCategory, setDisplayCurrency, setExtraCurrency, EXTRA_CURRENCIES, type TxType } from '~/composables/useStore'
 import { confirmar } from '~/composables/useConfirm'
 
 definePageMeta({ crumb: 'Configurações', title: 'Configurações' })
@@ -11,7 +11,7 @@ const tab = ref<'perfil' | 'cat' | 'cot' | 'notif' | 'dados'>('perfil')
 const subnav = [
   { id: 'perfil', label: 'Perfil' },
   { id: 'cat', label: 'Categorias' },
-  { id: 'cot', label: 'Cotação USD/BRL' },
+  { id: 'cot', label: 'Moedas & Câmbio' },
   { id: 'notif', label: 'Notificações' },
   { id: 'dados', label: 'Dados e Privacidade' },
 ] as const
@@ -41,9 +41,42 @@ function salvarFoto(dataUrl: string) {
   editorOpen.value = false
 }
 function salvarPerfil() {
-  setProfile({ name: nomeEdit.value.trim() || undefined })
+  setProfile({ name: nomeEdit.value.trim() || undefined, timezone: tzEdit.value })
   salvouPerfil.value = true
   setTimeout(() => (salvouPerfil.value = false), 2000)
+}
+
+// ---- fuso horário (lista IANA completa quando o navegador suporta) ----
+const TZ_FALLBACK = [
+  'America/Sao_Paulo', 'America/Manaus', 'America/Fortaleza', 'America/Recife', 'America/Cuiaba', 'America/Rio_Branco', 'America/Noronha',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage',
+  'America/Toronto', 'America/Vancouver', 'America/Mexico_City', 'America/Bogota', 'America/Lima', 'America/Santiago',
+  'America/Argentina/Buenos_Aires', 'America/Montevideo', 'America/Caracas', 'America/Asuncion', 'America/La_Paz',
+  'Europe/Lisbon', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome', 'Europe/Zurich',
+  'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Dubai', 'Australia/Sydney', 'Pacific/Auckland', 'UTC',
+]
+const timezones = ref<string[]>(TZ_FALLBACK)
+const tzEdit = ref(store.profile.timezone || 'America/Sao_Paulo')
+watchEffect(() => { tzEdit.value = store.profile.timezone || 'America/Sao_Paulo' })
+onMounted(() => {
+  try {
+    const all = (Intl as any).supportedValuesOf?.('timeZone')
+    if (Array.isArray(all) && all.length) timezones.value = all
+  } catch { /* mantém fallback */ }
+})
+
+// ---- moedas (padrão de exibição + adicionais) ----
+const moedaPadrao = computed({
+  get: () => store.displayCurrency,
+  set: (v: string) => setDisplayCurrency(v),
+})
+function toggleMoeda(code: string) {
+  const cur = store.extraCurrencies[code]
+  setExtraCurrency(code, !(cur?.enabled), cur?.rate)
+}
+function setTaxa(code: string, e: Event) {
+  const v = Number((e.target as HTMLInputElement).value)
+  if (v > 0) setExtraCurrency(code, store.extraCurrencies[code]?.enabled ?? false, v)
 }
 
 // ---- categorias ----
@@ -166,8 +199,19 @@ function importarJSON(e: Event) {
         <div class="form-grid">
           <div class="field"><label class="label">Nome completo</label><input v-model="nomeEdit" class="field-box field-input" /></div>
           <div class="field"><label class="label">E-mail</label><div class="field-box">{{ email }}</div></div>
-          <div class="field"><label class="label">Fuso horário</label><div class="field-box field-select">São Paulo (GMT-3)<Icon name="chevronDown" :size="15" color="#A0A3B5" :stroke="2" /></div></div>
-          <div class="field"><label class="label">Moeda padrão de exibição</label><div class="field-box field-select">Real (BRL)<Icon name="chevronDown" :size="15" color="#A0A3B5" :stroke="2" /></div></div>
+          <div class="field">
+            <label class="label">Fuso horário</label>
+            <select v-model="tzEdit" class="field-box field-input">
+              <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz.replace(/_/g, ' ') }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label">Moeda padrão de exibição</label>
+            <select v-model="moedaPadrao" class="field-box field-input">
+              <option value="BRL">Real (BRL)</option>
+              <option value="USD">Dólar (USD)</option>
+            </select>
+          </div>
         </div>
         <div style="margin-top:24px; display:flex; align-items:center; gap:14px">
           <button class="btn-primary" @click="salvarPerfil">Salvar alterações</button>
@@ -211,9 +255,25 @@ function importarJSON(e: Event) {
           <button class="btn-primary" @click="aplicarCotacao">Aplicar</button>
         </div>
         <div class="label" style="margin-bottom:10px">Histórico recente</div>
-        <div class="cot-table">
+        <div class="cot-table" style="margin-bottom:26px">
           <div class="cot-table-head"><span style="flex:1">Data</span><span style="width:90px; text-align:right">Cotação</span><span style="width:130px; text-align:right">Fonte</span></div>
           <div v-for="h in cotHistory" :key="h.data" class="cot-table-row"><span style="flex:1">{{ h.data }}</span><span style="width:90px; text-align:right; font-weight:600">{{ h.val }}</span><span style="width:130px; text-align:right; color:var(--text-2)">{{ h.fonte }}</span></div>
+        </div>
+
+        <h3 class="h3" style="margin-bottom:6px">Moedas adicionais</h3>
+        <p class="notif-sub" style="margin-bottom:14px">BRL e USD são nativas. Ative outras moedas para usá-las em receitas e despesas — só as ativas aparecem no cadastro de lançamento. A taxa (R$ por unidade) é editável.</p>
+        <div v-for="(info, code) in EXTRA_CURRENCIES" :key="code" class="moeda-row">
+          <div style="flex:1">
+            <div class="notif-title">{{ code }} — {{ info.name }}</div>
+            <div class="notif-sub">Taxa: R$ {{ (store.extraCurrencies[code]?.rate ?? info.defaultRate).toFixed(4) }} por {{ code }}</div>
+          </div>
+          <input
+            v-if="store.extraCurrencies[code]?.enabled"
+            type="number" step="0.0001" min="0.0001" class="field-box field-input taxa-input"
+            :value="store.extraCurrencies[code]?.rate ?? info.defaultRate"
+            @change="setTaxa(code as string, $event)"
+          />
+          <button class="switch-lg" :class="{ 'is-on': store.extraCurrencies[code]?.enabled }" @click="toggleMoeda(code as string)"><div class="switch-lg-knob" /></button>
         </div>
       </div>
 
@@ -320,6 +380,9 @@ function importarJSON(e: Event) {
 .cot-table { border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; }
 .cot-table-head { display: flex; padding: 11px 16px; background: var(--surface-2); font-size: 12px; color: var(--text-2); }
 .cot-table-row { display: flex; padding: 12px 16px; border-top: 1px solid var(--surface-3); font-size: 13px; }
+
+.moeda-row { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid var(--surface-3); }
+.taxa-input { width: 120px; height: 38px; text-align: right; }
 
 .notif { display: flex; align-items: center; padding: 14px 0; border-top: 1px solid var(--surface-3); }
 .notif-title { font-size: 14px; font-weight: 500; }

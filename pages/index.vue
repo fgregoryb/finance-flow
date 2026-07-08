@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useStore, brl, usd, catMeta, hexRgba } from '~/composables/useStore'
+import { useStore, brl, fmtMoney, catMeta, hexRgba } from '~/composables/useStore'
 import { useFinance } from '~/composables/useFinance'
 import { useDisplay } from '~/composables/useDisplay'
 
@@ -183,10 +183,10 @@ const saldoColor = computed(() => (resumo.value.saldo >= 0 ? '#fff' : '#fff'))
             </div>
             <div class="tx-cat">{{ l.category }}</div>
           </div>
-          <span class="cur-badge" :style="l.currency === 'USD' ? { color: '#2B8FE0', background: 'rgba(77,171,247,0.12)' } : { color: '#6B7088', background: '#F1F3F8' }">{{ l.currency }}</span>
+          <span class="cur-badge" :style="l.currency !== 'BRL' ? { color: '#2B8FE0', background: 'rgba(77,171,247,0.12)' } : { color: '#6B7088', background: '#F1F3F8' }">{{ l.currency }}</span>
           <div class="tx-amt">
-            <div :style="{ color: l.type === 'income' ? '#00A88A' : '#F03A5C' }">{{ l.type === 'income' ? '+' : '−' }}{{ l.currency === 'USD' ? usd(l.amount) : disp(l.amount) }}</div>
-            <div v-if="l.currency === 'USD'" class="tx-conv">≈ {{ disp(l.amountBrl) }}</div>
+            <div :style="{ color: l.type === 'income' ? '#00A88A' : '#F03A5C' }">{{ l.type === 'income' ? '+' : '−' }}{{ l.currency === 'BRL' ? disp(l.amount) : fmtMoney(l.currency, l.amount) }}</div>
+            <div v-if="l.currency !== 'BRL'" class="tx-conv">≈ {{ disp(l.amountBrl) }}</div>
           </div>
         </div>
       </div>

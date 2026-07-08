@@ -3,7 +3,8 @@ import { useStore, addSharedAccount, editSharedAccount, removeSharedAccount, set
 import { useFinance } from '~/composables/useFinance'
 import { useDisplay } from '~/composables/useDisplay'
 import { confirmar } from '~/composables/useConfirm'
-import { abrirNovo } from '~/composables/useDrawer'
+import { abrirNovo, abrirEdicao } from '~/composables/useDrawer'
+import { removeTransaction, type Tx } from '~/composables/useStore'
 
 definePageMeta({ crumb: 'Contas Conjuntas', title: 'Contas Conjuntas' })
 
@@ -56,6 +57,10 @@ async function excluirConta(a: any) {
 const detalhe = ref<string | null>(null)
 const contaDetalhe = computed(() => store.shared.find((a) => a.id === detalhe.value))
 const txsDetalhe = computed(() => (detalhe.value ? accountTxs(detalhe.value).slice().sort((a, b) => b.date.localeCompare(a.date)) : []))
+
+async function excluirTx(t: Tx) {
+  if (await confirmar({ title: 'Excluir lançamento', message: `Tem certeza que deseja excluir "${t.desc}"?`, confirmLabel: 'Excluir' })) removeTransaction(t.id)
+}
 
 async function quitar(a: any) {
   if (await confirmar({ title: 'Marcar como quitado', message: `Confirmar que ${a.settle.from} acertou ${disp(a.settle.amount)} com ${a.settle.to}?`, confirmLabel: 'Marcar como quitado', danger: false })) settleAccount(a.id)
@@ -172,6 +177,10 @@ async function quitar(a: any) {
                 <div class="tx-ico" :style="{ background: hexRgba(catMeta(t.category).color, 0.14) }"><Icon :name="catMeta(t.category).icon" :size="18" :color="catMeta(t.category).color" :stroke="1.8" /></div>
                 <div style="flex:1; min-width:0"><div class="det-tx-desc">{{ t.desc }}</div><div class="det-tx-cat">{{ t.category }}</div></div>
                 <div class="det-tx-val" :style="{ color: t.type === 'income' ? '#00A88A' : '#F03A5C' }">{{ t.type === 'income' ? '+' : '−' }}{{ disp(t.amountBrl) }}</div>
+                <div class="det-tx-actions">
+                  <button class="sq-mini" title="Editar" @click="abrirEdicao(t.id)"><Icon name="edit" :size="14" color="#6B7088" :stroke="1.8" /></button>
+                  <button class="sq-mini" title="Excluir" @click="excluirTx(t)"><Icon name="trash" :size="14" color="#F03A5C" :stroke="1.8" /></button>
+                </div>
               </div>
             </div>
             <div v-else class="cc-empty">Nenhum lançamento ainda. Adicione o primeiro.</div>
@@ -260,6 +269,8 @@ async function quitar(a: any) {
 .det-tx-desc { font-size: 14px; font-weight: 600; }
 .det-tx-cat { font-size: 12px; color: var(--text-2); }
 .det-tx-val { font-size: 14px; font-weight: 700; }
+.det-tx-actions { display: flex; gap: 4px; }
+.sq-mini { width: 28px; height: 28px; border-radius: 8px; background: var(--surface-3); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .cc-empty { font-size: 13px; color: var(--text-2); padding: 10px 0; }
 
 @media (max-width: 1100px) { .cards { grid-template-columns: 1fr; } }

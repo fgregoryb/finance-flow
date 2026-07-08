@@ -92,10 +92,10 @@ async function loadTransactions(supabase: any, store: any) {
       .select('*')
       .order('date', { ascending: false })
     if (error) throw error
-    if (rows && rows.length > 0) {
-      store.transactions = rows.map(rowToTx)
-    }
-    // rows vazio: usuário novo (fica []) ou pré-migração (mantém o que veio do blob)
+    // A tabela é SEMPRE a fonte de verdade quando a consulta funciona —
+    // inclusive vazia. Isso garante que exclusões (na UI ou via SQL) nunca
+    // sejam "ressuscitadas" por um cache local desatualizado.
+    store.transactions = (rows || []).map(rowToTx)
   } catch (e: any) {
     // tabela ainda não criada (pré-migração): segue com os lançamentos do blob
     console.warn('[sync] tabela transactions indisponível — usando o blob:', e?.message || e)
@@ -115,6 +115,7 @@ function rowToTx(r: any): Tx {
     recurring: !!r.recurring,
     notes: r.notes ?? undefined,
     context: r.context || 'Pessoal',
+    bankAccountId: r.bank_account_id ?? undefined,
   }
 }
 

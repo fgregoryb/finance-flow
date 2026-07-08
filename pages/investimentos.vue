@@ -94,9 +94,9 @@ onUnmounted(() => clearInterval(timer))
     <div class="head-cards">
       <div class="card hc"><div class="hc-label">Total investido</div><div class="hc-value">{{ disp(invest.totalInvestido) }}</div></div>
       <div class="card hc"><div class="hc-label">Valor atual</div><div class="hc-value">{{ disp(invest.valorAtual) }}</div></div>
-      <div class="hc-green">
+      <div class="hc-green" :class="{ neg: invest.rentPct < 0 }">
         <div class="hc-green-label">Rentabilidade total</div>
-        <div class="hc-green-row"><span class="hc-green-pct">{{ pct(invest.rentPct) }}</span><span class="hc-green-abs">+{{ disp(invest.rentAbs) }}</span></div>
+        <div class="hc-green-row"><span class="hc-green-pct">{{ pct(invest.rentPct) }}</span><span class="hc-green-abs">{{ invest.rentAbs >= 0 ? '+' : '−' }}{{ disp(Math.abs(invest.rentAbs)) }}</span></div>
       </div>
     </div>
 
@@ -136,28 +136,30 @@ onUnmounted(() => clearInterval(timer))
           {{ erro || `Cotações de cripto atualizadas às ${ultimaAtualizacao} (CoinGecko)` }}
         </p>
 
-        <div class="tbl-head">
-          <span>Ativo</span><span>Moeda</span><span style="text-align:right">Aportado</span><span style="text-align:right">Atual</span><span style="text-align:right">Rent.</span><span></span>
-        </div>
-        <div v-for="r in rowsFiltradas" :key="r.id" class="tbl-row">
-          <div>
-            <div class="tbl-asset">{{ r.name }}<span v-if="r.quoteSource === 'crypto'" class="auto-badge">auto</span></div>
-            <div class="tbl-meta">{{ r.broker }} · {{ r.type }}</div>
+        <div class="tbl-scroll">
+          <div class="tbl-head">
+            <span>Ativo</span><span>Moeda</span><span style="text-align:right">Aportado</span><span style="text-align:right">Atual</span><span style="text-align:right">Rent.</span><span></span>
           </div>
-          <span><span class="cur-badge" :style="curBadgeStyle(r.currency)">{{ r.currency }}</span></span>
-          <span class="tbl-num">{{ disp(r.aportBrl) }}</span>
-          <span class="tbl-num" style="font-weight:600">{{ disp(r.atualBrl) }}</span>
-          <span class="tbl-num" style="font-weight:700" :style="{ color: r.rentPct >= 0 ? '#00A88A' : '#F03A5C' }">{{ pct(r.rentPct) }}</span>
-          <span class="row-actions">
-            <button class="sq-btn" title="Editar" @click="abrirEditar(r)"><Icon name="edit" :size="14" color="#6B7088" :stroke="1.8" /></button>
-            <button class="sq-btn" title="Excluir" @click="excluirInv(r.id, r.name)"><Icon name="trash" :size="14" color="#F03A5C" :stroke="1.8" /></button>
-          </span>
-        </div>
-        <div class="tbl-total">
-          <span style="font-weight:700">Total</span><span />
-          <span class="tbl-num" style="font-weight:700">{{ disp(invest.totalInvestido) }}</span>
-          <span class="tbl-num" style="font-weight:700">{{ disp(invest.valorAtual) }}</span>
-          <span class="tbl-num" style="font-weight:800; color:#00A88A">{{ pct(invest.rentPct) }}</span><span />
+          <div v-for="r in rowsFiltradas" :key="r.id" class="tbl-row">
+            <div>
+              <div class="tbl-asset">{{ r.name }}<span v-if="r.quoteSource === 'crypto'" class="auto-badge">auto</span></div>
+              <div class="tbl-meta">{{ r.broker }} · {{ r.type }}</div>
+            </div>
+            <span><span class="cur-badge" :style="curBadgeStyle(r.currency)">{{ r.currency }}</span></span>
+            <span class="tbl-num">{{ disp(r.aportBrl) }}</span>
+            <span class="tbl-num" style="font-weight:600">{{ disp(r.atualBrl) }}</span>
+            <span class="tbl-num" style="font-weight:700" :style="{ color: r.rentPct >= 0 ? '#00A88A' : '#F03A5C' }">{{ pct(r.rentPct) }}</span>
+            <span class="row-actions">
+              <button class="sq-btn" title="Editar" @click="abrirEditar(r)"><Icon name="edit" :size="14" color="#6B7088" :stroke="1.8" /></button>
+              <button class="sq-btn" title="Excluir" @click="excluirInv(r.id, r.name)"><Icon name="trash" :size="14" color="#F03A5C" :stroke="1.8" /></button>
+            </span>
+          </div>
+          <div class="tbl-total">
+            <span style="font-weight:700">Total</span><span />
+            <span class="tbl-num" style="font-weight:700">{{ disp(invest.totalInvestido) }}</span>
+            <span class="tbl-num" style="font-weight:700">{{ disp(invest.valorAtual) }}</span>
+            <span class="tbl-num" style="font-weight:800" :style="{ color: invest.rentPct >= 0 ? '#00A88A' : '#F03A5C' }">{{ pct(invest.rentPct) }}</span><span />
+          </div>
         </div>
       </div>
     </div>
@@ -215,6 +217,7 @@ onUnmounted(() => clearInterval(timer))
 .hc-label { font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
 .hc-value { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
 .hc-green { background: linear-gradient(135deg, #00D2A0, #00b88c); border-radius: 16px; padding: 20px; box-shadow: 0 8px 28px rgba(0, 210, 160, 0.35); }
+.hc-green.neg { background: linear-gradient(135deg, #FF4D6D, #e0364f); box-shadow: 0 8px 28px rgba(255, 77, 109, 0.35); }
 .hc-green-label { font-size: 13px; color: rgba(255,255,255,0.85); margin-bottom: 8px; }
 .hc-green-row { display: flex; align-items: baseline; gap: 10px; }
 .hc-green-pct { font-size: 26px; font-weight: 800; color: #fff; }
@@ -241,13 +244,14 @@ onUnmounted(() => clearInterval(timer))
 .quote-note { font-size: 12px; color: var(--text-2); margin: 0 0 12px; }
 .quote-note.err { color: var(--danger-text); }
 
-.tbl-head { display: grid; grid-template-columns: 1.6fr 0.7fr 0.9fr 0.9fr 0.7fr 0.6fr; gap: 10px; padding: 0 0 10px; border-bottom: 1px solid var(--border-soft); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); }
-.tbl-row { display: grid; grid-template-columns: 1.6fr 0.7fr 0.9fr 0.9fr 0.7fr 0.6fr; gap: 10px; padding: 13px 0; border-bottom: 1px solid var(--surface-3); align-items: center; }
+.tbl-scroll { overflow-x: auto; }
+.tbl-head { display: grid; grid-template-columns: 1.6fr 0.7fr 0.9fr 0.9fr 0.7fr 0.6fr; gap: 10px; padding: 0 0 10px; border-bottom: 1px solid var(--border-soft); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); min-width: 620px; }
+.tbl-row { display: grid; grid-template-columns: 1.6fr 0.7fr 0.9fr 0.9fr 0.7fr 0.6fr; gap: 10px; padding: 13px 0; border-bottom: 1px solid var(--surface-3); align-items: center; min-width: 620px; }
 .tbl-asset { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
 .auto-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #00A88A; background: rgba(0,210,160,0.14); padding: 2px 6px; border-radius: 5px; }
 .tbl-meta { font-size: 11px; color: var(--text-3); }
 .tbl-num { font-size: 13px; text-align: right; }
-.tbl-total { display: grid; grid-template-columns: 1.6fr 0.7fr 0.9fr 0.9fr 0.7fr 0.6fr; gap: 10px; padding: 14px 0 2px; align-items: center; }
+.tbl-total { display: grid; grid-template-columns: 1.6fr 0.7fr 0.9fr 0.9fr 0.7fr 0.6fr; gap: 10px; padding: 14px 0 2px; align-items: center; min-width: 620px; }
 .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .sq-btn { width: 30px; height: 30px; border-radius: 8px; background: var(--surface-3); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 

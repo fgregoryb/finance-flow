@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { usd, catMeta, hexRgba, removeTransaction } from '~/composables/useStore'
+import { useStore, fmtMoney, catMeta, hexRgba, removeTransaction } from '~/composables/useStore'
 import { useFinance } from '~/composables/useFinance'
 import { useDisplay } from '~/composables/useDisplay'
 import { abrirNovo, abrirEdicao } from '~/composables/useDrawer'
@@ -9,6 +9,12 @@ definePageMeta({ crumb: 'Lançamentos', title: 'Lançamentos' })
 
 const { grupos, resumo } = useFinance()
 const { disp } = useDisplay()
+const store = useStore()
+
+function bankName(id?: string) {
+  if (!id) return ''
+  return store.checking.find((c) => c.id === id)?.bank || ''
+}
 
 async function excluir(id: string, desc: string) {
   if (await confirmar({ title: 'Excluir lançamento', message: `Tem certeza que deseja excluir "${desc}"?`, confirmLabel: 'Excluir' })) removeTransaction(id)
@@ -73,12 +79,12 @@ const gruposFiltrados = computed(() => {
               <span class="tx-title">{{ t.desc }}</span>
               <span v-if="t.recurring" class="pill-tag" style="color:#D99400; background:rgba(255,184,0,0.14)">Recorrente</span>
             </div>
-            <div class="tx-cat">{{ t.category }}<span v-if="t.notes"> · {{ t.notes }}</span></div>
+            <div class="tx-cat">{{ t.category }}<span v-if="bankName(t.bankAccountId)"> · {{ bankName(t.bankAccountId) }}</span><span v-if="t.notes"> · {{ t.notes }}</span></div>
           </div>
-          <span class="cur-badge" :style="t.currency === 'USD' ? { color: '#2B8FE0', background: 'rgba(77,171,247,0.12)' } : { color: '#6B7088', background: '#F1F3F8' }">{{ t.currency }}</span>
+          <span class="cur-badge" :style="t.currency !== 'BRL' ? { color: '#2B8FE0', background: 'rgba(77,171,247,0.12)' } : { color: '#6B7088', background: '#F1F3F8' }">{{ t.currency }}</span>
           <div class="tx-amt">
-            <div :style="{ color: t.type === 'income' ? '#00A88A' : '#F03A5C' }">{{ t.type === 'income' ? '+' : '−' }}{{ t.currency === 'USD' ? usd(t.amount) : disp(t.amount) }}</div>
-            <div v-if="t.currency === 'USD'" class="tx-conv">≈ {{ disp(t.amountBrl) }}</div>
+            <div :style="{ color: t.type === 'income' ? '#00A88A' : '#F03A5C' }">{{ t.type === 'income' ? '+' : '−' }}{{ t.currency === 'BRL' ? disp(t.amount) : fmtMoney(t.currency, t.amount) }}</div>
+            <div v-if="t.currency !== 'BRL'" class="tx-conv">≈ {{ disp(t.amountBrl) }}</div>
           </div>
           <div class="tx-actions">
             <button class="tx-act" title="Editar" @click="abrirEdicao(t.id)"><Icon name="edit" :size="15" color="#6B7088" :stroke="1.8" /></button>
