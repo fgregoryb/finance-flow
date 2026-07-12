@@ -58,17 +58,29 @@ export interface Inv {
 }
 
 export interface SharedMember { name: string; initial: string; color: string }
+/** @deprecated dados legados — migrados para CheckingAccount (type: 'casal') em applyState(). */
 export interface SharedAccount {
   id: string
   name: string
   icon: string
-  color: string // gradiente base
+  color: string
   mainCurrency: Currency
   members: SharedMember[]
   settle?: { from: string; to: string; amount: number } | null
 }
 
-export interface CheckingAccount { id: string; bank: string; balance: number; currency: Currency; color: string }
+export type AccountType = 'pessoal' | 'casal'
+export interface CheckingAccount {
+  id: string
+  bank: string // nome do banco (pessoal) ou da conta compartilhada (casal)
+  balance: number // saldo manual — só usado quando type === 'pessoal'
+  currency: Currency
+  color: string
+  type: AccountType
+  icon?: string // ícone da conta (relevante para 'casal')
+  members?: SharedMember[] // membros da conta compartilhada (só 'casal')
+  settle?: { from: string; to: string; amount: number } | null // "quem deve a quem" (só 'casal')
+}
 
 // ---- metadados de categoria (ícone + cor) -----------------------------------
 export const CAT_META: Record<string, { icon: string; color: string }> = {
@@ -176,35 +188,10 @@ function seedInvestments(): Inv[] {
   ].map((i) => ({ ...i, id: uid() }))
 }
 
-function seedShared(): SharedAccount[] {
-  return [
-    {
-      id: uid(), name: 'Casal', icon: 'home', color: '#6C63FF', mainCurrency: 'BRL',
-      members: [
-        { name: 'Lucas', initial: 'L', color: '#00D2A0' },
-        { name: 'Ana', initial: 'A', color: '#FFB800' },
-      ],
-      settle: { from: 'Ana', to: 'Você', amount: 340 },
-    },
-  ]
-}
-
-// Lançamentos da conta "Casal" (derivam o resumo da conta).
-function seedSharedTx(accId: string): Tx[] {
-  const raw: Omit<Tx, 'id'>[] = [
-    { date: '2026-06-02', desc: 'Aluguel', type: 'expense', category: 'Moradia', currency: 'BRL', amount: 1800, amountBrl: 1800, recurring: true, context: accId },
-    { date: '2026-06-05', desc: 'Mercado', type: 'expense', category: 'Alimentação', currency: 'BRL', amount: 760, amountBrl: 760, recurring: false, context: accId },
-    { date: '2026-06-10', desc: 'Conta de luz', type: 'expense', category: 'Moradia', currency: 'BRL', amount: 320, amountBrl: 320, recurring: true, context: accId },
-    { date: '2026-06-01', desc: 'Contribuição Lucas', type: 'income', category: 'Outros', currency: 'BRL', amount: 1600, amountBrl: 1600, recurring: true, context: accId },
-    { date: '2026-06-01', desc: 'Contribuição Ana', type: 'income', category: 'Outros', currency: 'BRL', amount: 1600, amountBrl: 1600, recurring: true, context: accId },
-  ]
-  return raw.map((t) => ({ ...t, id: uid() }))
-}
-
 function seedChecking(): CheckingAccount[] {
   return [
-    { id: uid(), bank: 'Itaú', balance: 11397.1, currency: 'BRL', color: '#FF6B00' },
-    { id: uid(), bank: 'Nubank', balance: 2310, currency: 'BRL', color: '#8A05BE' },
+    { id: uid(), bank: 'Itaú', balance: 11397.1, currency: 'BRL', color: '#FF6B00', type: 'pessoal' },
+    { id: uid(), bank: 'Nubank', balance: 2310, currency: 'BRL', color: '#8A05BE', type: 'pessoal' },
   ]
 }
 
@@ -219,7 +206,6 @@ interface State {
   displayCurrency: Currency
   transactions: Tx[]
   investments: Inv[]
-  shared: SharedAccount[]
   checking: CheckingAccount[]
   inviteVisible: boolean
   categories: { income: string[]; expense: string[] }
@@ -237,7 +223,6 @@ function blankState(): State {
     displayCurrency: 'BRL',
     transactions: [],
     investments: [],
-    shared: [],
     checking: [],
     inviteVisible: false,
     categories: { income: [...CATEGORIES.income], expense: [...CATEGORIES.expense] },
@@ -292,6 +277,36 @@ export function applyState(parsed: any) {
     // estado sem versão (ex.: backup de import) — aplica os campos conhecidos
     Object.assign(state, parsed, { version: STATE_VERSION })
   }
+  migrateSharedIntoChecking()
+}
+
+/**
+ * Migração de dados: "contas conjuntas" (antigo array `shared`, separado)
+ * viram itens de `checking` com type:'casal' — mesma conta corrente, com
+ * membros e "quem deve a quem". Os `id`s são preservados, então os
+ * lançamentos existentes (campo `context`) continuam apontando certo, sem
+ * precisar tocar na tabela `transactions`.
+ */
+function migrateSharedIntoChecking() {
+  const legacy = (state as any).shared as SharedAccount[] | undefined
+  if (Array.isArray(legacy) && legacy.length) {
+    for (const s of legacy) {
+      if (!state.checking.some((c) => c.id === s.id)) {
+        state.checking.push({
+          id: s.id,
+          bank: s.name,
+          balance: 0,
+          currency: s.mainCurrency || 'BRL',
+          color: s.color,
+          type: 'casal',
+          icon: s.icon,
+          members: s.members,
+          settle: s.settle ?? null,
+        })
+      }
+    }
+  }
+  delete (state as any).shared
 }
 
 /**
@@ -447,41 +462,21 @@ export function removeInvestment(id: string) {
   if (i >= 0) state.investments.splice(i, 1)
 }
 
-// ---- contas conjuntas -------------------------------------------------------
-export function addSharedAccount(input: Omit<SharedAccount, 'id'>) {
-  state.shared.push({ ...input, id: uid() })
-}
-export function editSharedAccount(id: string, input: Partial<SharedAccount>) {
-  const a = state.shared.find((x) => x.id === id)
-  if (a) Object.assign(a, input)
-}
-export function removeSharedAccount(id: string) {
-  const i = state.shared.findIndex((x) => x.id === id)
-  if (i >= 0) state.shared.splice(i, 1)
-  // remove também os lançamentos da conta (memória + tabela)
-  state.transactions = state.transactions.filter((t) => t.context !== id)
-  if (remote.client && remote.userId) {
-    remote.client.from('transactions').delete().eq('context', id)
-      .then(({ error }: any) => error && console.warn('[tx] delete por conta falhou:', error.message))
-  }
-}
-export function settleAccount(id: string) {
-  const a = state.shared.find((x) => x.id === id)
-  if (a) a.settle = null
-}
-export function dismissInvite() { state.inviteVisible = false }
-export function acceptInvite() {
-  state.shared.push({
-    id: uid(), name: 'Apartamento 502', icon: 'home', color: '#4DABF7', mainCurrency: 'BRL',
-    members: [{ name: 'Ana', initial: 'A', color: '#FFB800' }, { name: 'Você', initial: 'V', color: '#00D2A0' }],
-    settle: null,
+// ---- contas correntes (tipo 'pessoal' ou 'casal') ---------------------------
+/** Cria uma conta corrente. Contas 'casal' recebem membros e ficam sem saldo manual (é calculado dos lançamentos). */
+export function addChecking(input: { bank: string; currency?: Currency; color?: string; type?: AccountType; balance?: number; icon?: string; members?: SharedMember[] }) {
+  const type = input.type || 'pessoal'
+  state.checking.push({
+    id: uid(),
+    bank: input.bank,
+    balance: type === 'casal' ? 0 : input.balance ?? 0,
+    currency: input.currency || 'BRL',
+    color: input.color || '#6C63FF',
+    type,
+    icon: input.icon,
+    members: type === 'casal' ? (input.members || []) : undefined,
+    settle: type === 'casal' ? null : undefined,
   })
-  state.inviteVisible = false
-}
-
-// ---- contas correntes -------------------------------------------------------
-export function addChecking(bank: string, balance: number, currency: Currency = 'BRL', color = '#6C63FF') {
-  state.checking.push({ id: uid(), bank, balance, currency, color })
 }
 export function checkingBrl(c: CheckingAccount) {
   return c.currency === 'USD' ? c.balance * state.usdBrl : c.balance
@@ -492,7 +487,28 @@ export function editChecking(id: string, input: Partial<CheckingAccount>) {
 }
 export function removeChecking(id: string) {
   const i = state.checking.findIndex((x) => x.id === id)
+  const isCasal = state.checking[i]?.type === 'casal'
   if (i >= 0) state.checking.splice(i, 1)
+  if (isCasal) {
+    // remove também os lançamentos da conta conjunta (memória + tabela)
+    state.transactions = state.transactions.filter((t) => t.context !== id)
+    if (remote.client && remote.userId) {
+      remote.client.from('transactions').delete().eq('context', id)
+        .then(({ error }: any) => error && console.warn('[tx] delete por conta falhou:', error.message))
+    }
+  }
+}
+export function settleAccount(id: string) {
+  const a = state.checking.find((x) => x.id === id)
+  if (a) a.settle = null
+}
+export function dismissInvite() { state.inviteVisible = false }
+export function acceptInvite() {
+  addChecking({
+    bank: 'Apartamento 502', type: 'casal', color: '#4DABF7', icon: 'home',
+    members: [{ name: 'Ana', initial: 'A', color: '#FFB800' }, { name: 'Você', initial: 'V', color: '#00D2A0' }],
+  })
+  state.inviteVisible = false
 }
 
 // ---- moedas -----------------------------------------------------------------

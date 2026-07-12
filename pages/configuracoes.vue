@@ -139,7 +139,7 @@ function exportarJSON() {
   // backup completo do estado
   const dump = {
     transactions: store.transactions, investments: store.investments,
-    shared: store.shared, checking: store.checking, categories: store.categories,
+    checking: store.checking, categories: store.categories,
     customMeta: store.customMeta, usdBrl: store.usdBrl,
   }
   const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' })
@@ -162,8 +162,15 @@ function importarJSON(e: Event) {
       const d = JSON.parse(reader.result as string)
       if (Array.isArray(d.transactions)) store.transactions = d.transactions
       if (Array.isArray(d.investments)) store.investments = d.investments
-      if (Array.isArray(d.shared)) store.shared = d.shared
       if (Array.isArray(d.checking)) store.checking = d.checking
+      // backups antigos podem ter um array `shared` separado — dobra em checking (type:'casal')
+      if (Array.isArray(d.shared)) {
+        for (const s of d.shared) {
+          if (!store.checking.some((c: any) => c.id === s.id)) {
+            store.checking.push({ id: s.id, bank: s.name, balance: 0, currency: s.mainCurrency || 'BRL', color: s.color, type: 'casal', icon: s.icon, members: s.members, settle: s.settle ?? null })
+          }
+        }
+      }
       if (d.categories) store.categories = d.categories
       if (d.customMeta) store.customMeta = d.customMeta
       if (d.usdBrl) store.usdBrl = d.usdBrl

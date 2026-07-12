@@ -16,17 +16,13 @@ const { firstName, fullName, initials, email, avatar, avatarStyle } = useProfile
 const { currency, toggle } = useDisplay()
 const supabase = useSupabaseClient()
 
-// Pendências reais de contas conjuntas (convites aguardando resposta).
-const pendencias = computed(() => (store.inviteVisible ? 1 : 0))
-
-const nav = computed(() => [
+const nav = [
   { to: '/', icon: 'dashboard', label: 'Dashboard' },
   { to: '/lancamentos', icon: 'swap', label: 'Lançamentos' },
-  { to: '/contas-conjuntas', icon: 'users', label: 'Contas Conjuntas', badge: pendencias.value || undefined },
   { to: '/investimentos', icon: 'trending', label: 'Investimentos' },
   { to: '/relatorios', icon: 'bars', label: 'Relatórios' },
   { to: '/configuracoes', icon: 'settings', label: 'Configurações' },
-])
+]
 
 const crumb = computed(() => (route.meta.crumb as string) || 'Dashboard')
 const title = computed(() =>
@@ -71,7 +67,6 @@ async function sair() {
         <NuxtLink v-for="n in nav" :key="n.to" :to="n.to" class="nav-item" :class="{ 'is-active': isActive(n.to) }">
           <Icon :name="n.icon" :size="19" :stroke="1.8" />
           {{ n.label }}
-          <span v-if="n.badge" class="nav-badge">{{ n.badge }}</span>
         </NuxtLink>
       </nav>
 

@@ -8,7 +8,9 @@ const store = useStore()
 
 const tipo = ref<TxType>('expense')
 const conta = ref('Pessoal')
-const contas = computed(() => [{ id: 'Pessoal', name: 'Pessoal' }, ...store.shared.map((s) => ({ id: s.id, name: s.name }))])
+const contas = computed(() => [{ id: 'Pessoal', name: 'Pessoal' }, ...store.checking.filter((c) => c.type === 'casal').map((c) => ({ id: c.id, name: c.bank }))])
+// Contas bancárias reais (não conjuntas) — usadas para vincular a origem do pagamento.
+const bancos = computed(() => store.checking.filter((c) => c.type !== 'casal'))
 const data = ref('2026-06-23')
 const desc = ref('')
 const categoria = ref('')
@@ -117,11 +119,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               </label>
             </div>
 
-            <label v-if="tipo === 'expense' && store.checking.length" class="fld">
+            <label v-if="tipo === 'expense' && bancos.length" class="fld">
               <span class="fld-label">Pago com (conta bancária)</span>
               <select v-model="banco" class="fld-box">
                 <option value="">Não vincular</option>
-                <option v-for="c in store.checking" :key="c.id" :value="c.id">{{ c.bank }}</option>
+                <option v-for="c in bancos" :key="c.id" :value="c.id">{{ c.bank }}</option>
               </select>
             </label>
 

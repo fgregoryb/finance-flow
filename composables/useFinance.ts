@@ -8,10 +8,10 @@ const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sáb
 export function useFinance() {
   const store = useStore()
   // Visões pessoais = lançamentos pessoais + quaisquer "órfãos" (cujo contexto
-  // não corresponde a nenhuma conta conjunta existente), para nada sumir.
-  const sharedIds = computed(() => new Set(store.shared.map((s) => s.id)))
+  // não corresponde a nenhuma conta 'casal' existente), para nada sumir.
+  const casalIds = computed(() => new Set(store.checking.filter((c) => c.type === 'casal').map((c) => c.id)))
   const txs = computed(() =>
-    store.transactions.filter((t) => !t.context || t.context === 'Pessoal' || !sharedIds.value.has(t.context)),
+    store.transactions.filter((t) => !t.context || t.context === 'Pessoal' || !casalIds.value.has(t.context)),
   )
 
   const income = computed(() => txs.value.filter((t) => t.type === 'income'))
@@ -126,7 +126,7 @@ export function useFinance() {
     }
   })
 
-  // ----- contas conjuntas -----
+  // ----- contas correntes do tipo 'casal' (compartilhadas) -----
   function accountTxs(accId: string) {
     return store.transactions.filter((t) => t.context === accId)
   }
@@ -142,7 +142,13 @@ export function useFinance() {
   }
 
   // ----- contas correntes -----
-  const checkingTotal = computed(() => store.checking.reduce((a, c) => a + (c.currency === 'USD' ? c.balance * store.usdBrl : c.balance), 0))
+  // Pessoal: saldo manual (convertido p/ BRL). Casal: saldo calculado dos lançamentos vinculados.
+  const checkingTotal = computed(() =>
+    store.checking.reduce((a, c) => {
+      if (c.type === 'casal') return a + accountSummary(c.id).saldo
+      return a + (c.currency === 'USD' ? c.balance * store.usdBrl : c.balance)
+    }, 0),
+  )
 
   return { resumo, catDespesas, catReceitas, distrib, serie6, grupos, recent, invest, hexRgba, accountTxs, accountSummary, checkingTotal }
 }

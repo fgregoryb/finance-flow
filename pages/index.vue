@@ -12,6 +12,7 @@ const { resumo, catDespesas, catReceitas, distrib, serie6, recent, invest, accou
 const colMode = ref<'Consolidado' | 'BRL' | 'USD'>('Consolidado')
 const catMode = ref<'Despesas' | 'Receitas'>('Despesas')
 
+const contasCasal = computed(() => store.checking.filter((c) => c.type === 'casal'))
 const serie = computed(() => serie6(colMode.value))
 const activeCat = computed(() => (catMode.value === 'Despesas' ? catDespesas.value : catReceitas.value))
 const catRows = computed(() =>
@@ -143,11 +144,11 @@ const saldoColor = computed(() => (resumo.value.saldo >= 0 ? '#fff' : '#fff'))
     <!-- contas conjuntas + investimentos -->
     <div class="grid-2">
       <div class="card" style="padding:22px">
-        <div class="block-head" style="margin-bottom:16px"><h3 class="h3">Contas conjuntas</h3><NuxtLink to="/contas-conjuntas" class="link-more">Ver todas</NuxtLink></div>
-        <div v-if="store.shared.length" class="acct-list">
-          <NuxtLink v-for="a in store.shared" :key="a.id" to="/contas-conjuntas" class="acct">
-            <div class="acct-ico" :style="{ background: hexRgba(a.color, 0.14) }"><Icon :name="a.icon" :size="20" :color="a.color" :stroke="1.8" /></div>
-            <div class="acct-info"><div class="acct-name">{{ a.name }}</div><div class="acct-sub">{{ accountSummary(a.id).count }} lançamentos · {{ a.members.length }} membros</div></div>
+        <div class="block-head" style="margin-bottom:16px"><h3 class="h3">Contas conjuntas</h3><NuxtLink to="/investimentos" class="link-more">Ver todas</NuxtLink></div>
+        <div v-if="contasCasal.length" class="acct-list">
+          <NuxtLink v-for="a in contasCasal" :key="a.id" to="/investimentos" class="acct">
+            <div class="acct-ico" :style="{ background: hexRgba(a.color, 0.14) }"><Icon :name="a.icon || 'users'" :size="20" :color="a.color" :stroke="1.8" /></div>
+            <div class="acct-info"><div class="acct-name">{{ a.bank }}</div><div class="acct-sub">{{ accountSummary(a.id).count }} lançamentos · {{ (a.members || []).length }} membros</div></div>
             <div class="acct-amt"><div :style="{ color: accountSummary(a.id).saldo >= 0 ? '#00A88A' : '#F03A5C' }">{{ accountSummary(a.id).saldo >= 0 ? '+' : '' }}{{ disp(accountSummary(a.id).saldo) }}</div><div class="acct-amt-sub">saldo do mês</div></div>
           </NuxtLink>
         </div>
