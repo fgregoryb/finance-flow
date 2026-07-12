@@ -68,7 +68,7 @@ function salvar() {
     date: data.value, desc: desc.value, type: tipo.value, category: categoria.value,
     currency: moeda.value, amount: valor.value, recurring: recorrente.value, notes: notes.value || undefined,
     context: conta.value,
-    bankAccountId: tipo.value === 'expense' && banco.value ? banco.value : undefined,
+    bankAccountId: banco.value || undefined,
   }
   if (editingId.value) editTransaction(editingId.value, payload)
   else addTransaction(payload)
@@ -119,8 +119,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               </label>
             </div>
 
-            <label v-if="tipo === 'expense' && bancos.length" class="fld">
-              <span class="fld-label">Pago com (conta bancária)</span>
+            <label v-if="bancos.length" class="fld">
+              <span class="fld-label">{{ tipo === 'expense' ? 'Pago com (conta bancária)' : 'Recebido em (conta bancária)' }}</span>
               <select v-model="banco" class="fld-box">
                 <option value="">Não vincular</option>
                 <option v-for="c in bancos" :key="c.id" :value="c.id">{{ c.bank }}</option>

@@ -1,18 +1,22 @@
 /** Derivações reativas a partir da store (totais, gráficos, agrupamentos). */
 import { computed } from 'vue'
 import { useStore, catMeta, hexRgba, type Tx } from './useStore'
+import { usePeriod } from './usePeriod'
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
 export function useFinance() {
   const store = useStore()
+  const { period, inPeriod } = usePeriod()
   // Visões pessoais = lançamentos pessoais + quaisquer "órfãos" (cujo contexto
   // não corresponde a nenhuma conta 'casal' existente), para nada sumir.
   const casalIds = computed(() => new Set(store.checking.filter((c) => c.type === 'casal').map((c) => c.id)))
-  const txs = computed(() =>
+  const personal = computed(() =>
     store.transactions.filter((t) => !t.context || t.context === 'Pessoal' || !casalIds.value.has(t.context)),
   )
+  // Visões do mês selecionado no header
+  const txs = computed(() => personal.value.filter((t) => inPeriod(t.date)))
 
   const income = computed(() => txs.value.filter((t) => t.type === 'income'))
   const expense = computed(() => txs.value.filter((t) => t.type === 'expense'))
@@ -66,22 +70,25 @@ export function useFinance() {
     }
   })
 
-  // Série 6 meses (mês atual = junho/2026; meses sem dados ficam 0)
+  // Série de 6 meses: janela que termina no mês selecionado no header
   function serie6(mode: 'Consolidado' | 'BRL' | 'USD') {
-    const months = [0, 1, 2, 3, 4, 5] // Jan..Jun de 2026
+    const months: { y: number; m: number }[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(period.value.y, period.value.m - i, 1)
+      months.push({ y: d.getFullYear(), m: d.getMonth() })
+    }
     const valueFor = (t: Tx) =>
       mode === 'Consolidado' ? t.amountBrl : mode === 'BRL' ? (t.currency === 'BRL' ? t.amount : 0) : (t.currency === 'USD' ? t.amount : 0)
     const rec = months.map(() => 0)
     const desp = months.map(() => 0)
-    for (const t of txs.value) {
+    for (const t of personal.value) {
       const d = new Date(t.date + 'T12:00:00') // evita shift de fuso (UTC → dia anterior)
-      if (d.getFullYear() !== 2026) continue
-      const m = d.getMonth()
-      if (m > 5) continue
-      if (t.type === 'income') rec[m] += valueFor(t)
-      else desp[m] += valueFor(t)
+      const idx = months.findIndex((mm) => mm.y === d.getFullYear() && mm.m === d.getMonth())
+      if (idx < 0) continue
+      if (t.type === 'income') rec[idx] += valueFor(t)
+      else desp[idx] += valueFor(t)
     }
-    return { labels: months.map((m) => MESES[m]), rec, desp }
+    return { labels: months.map((mm) => MESES[mm.m]), rec, desp }
   }
 
   // Lançamentos agrupados por dia (desc)

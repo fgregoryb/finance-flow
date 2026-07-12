@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { useStore } from '~/composables/useStore'
+import { useStore, acceptInvite, dismissInvite } from '~/composables/useStore'
 import { useDisplay } from '~/composables/useDisplay'
 import { useSyncStatus } from '~/composables/useSupabaseSync'
 import { useTheme } from '~/composables/useTheme'
+import { usePeriod } from '~/composables/usePeriod'
 
 const { theme, toggle: toggleTheme } = useTheme()
+const { label: periodLabel, prev: prevMonth, next: nextMonth } = usePeriod()
+
+// Notificações reais (hoje: convites de conta compartilhada pendentes)
+const notifOpen = ref(false)
+const notifCount = computed(() => (store.inviteVisible ? 1 : 0))
+function aceitarConvite() { acceptInvite(); notifOpen.value = false }
+function recusarConvite() { dismissInvite(); notifOpen.value = false }
 const route = useRoute()
 const sync = useSyncStatus()
 const syncLabel = computed(() => ({
@@ -93,9 +101,9 @@ async function sair() {
         </div>
 
         <div class="period">
-          <button class="period-arrow"><Icon name="chevronLeft" :size="16" :stroke="2" /></button>
-          <button class="period-label"><Icon name="calendar" :size="15" color="#6B7088" />Junho 2026</button>
-          <button class="period-arrow"><Icon name="chevronRight" :size="16" :stroke="2" /></button>
+          <button class="period-arrow" aria-label="Mês anterior" @click="prevMonth"><Icon name="chevronLeft" :size="16" :stroke="2" /></button>
+          <button class="period-label"><Icon name="calendar" :size="15" color="#6B7088" />{{ periodLabel }}</button>
+          <button class="period-arrow" aria-label="Próximo mês" @click="nextMonth"><Icon name="chevronRight" :size="16" :stroke="2" /></button>
         </div>
 
         <div class="topbar-actions">
@@ -106,9 +114,9 @@ async function sair() {
           <button class="icon-btn" :aria-label="theme === 'dark' ? 'Tema claro' : 'Tema escuro'" @click="toggleTheme">
             <Icon :name="theme === 'dark' ? 'sun' : 'moon'" :size="18" :stroke="1.8" />
           </button>
-          <button class="icon-btn">
+          <button class="icon-btn" aria-label="Notificações" @click="notifOpen = !notifOpen">
             <Icon name="bell" :size="18" :stroke="1.8" />
-            <span class="icon-btn-dot" />
+            <span v-if="notifCount > 0" class="icon-btn-dot" />
           </button>
           <div class="avatar-wrap">
             <button class="topbar-avatar" :style="avatarStyle" @click="menuOpen = !menuOpen">
@@ -123,6 +131,24 @@ async function sair() {
 
     <NovoLancamentoDrawer />
     <ConfirmDialog />
+
+    <Teleport to="body">
+      <div v-if="notifOpen" class="menu-backdrop" @click="notifOpen = false" />
+      <div v-if="notifOpen" class="notif-panel">
+        <div class="notif-panel-head">Notificações</div>
+        <div v-if="store.inviteVisible" class="notif-item">
+          <div class="notif-item-ico"><Icon name="send" :size="16" color="#6C63FF" :stroke="1.8" /></div>
+          <div class="notif-item-body">
+            <div class="notif-item-title"><b>Ana Silva</b> te convidou para a conta <b>"Apartamento 502"</b></div>
+            <div class="notif-item-actions">
+              <button class="notif-accept" @click="aceitarConvite">Aceitar</button>
+              <button class="notif-decline" @click="recusarConvite">Recusar</button>
+            </div>
+          </div>
+        </div>
+        <div v-else class="notif-empty">Nenhuma notificação nova.</div>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div v-if="menuOpen" class="menu-backdrop" @click="menuOpen = false" />
@@ -266,6 +292,21 @@ async function sair() {
 .avatar-menu-item:hover { background: var(--surface-3); }
 .avatar-menu-item.danger { color: var(--danger-text); }
 .menu-backdrop { position: fixed; inset: 0; z-index: 290; }
+
+.notif-panel {
+  position: fixed; right: 76px; top: 66px; z-index: 300;
+  width: 320px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 8px 28px rgba(20, 23, 40, 0.18); padding: 6px;
+}
+.notif-panel-head { padding: 10px 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--border-soft); margin-bottom: 6px; }
+.notif-item { display: flex; gap: 10px; padding: 10px 12px; }
+.notif-item-ico { width: 32px; height: 32px; flex: none; border-radius: 9px; background: rgba(108, 99, 255, 0.12); display: flex; align-items: center; justify-content: center; }
+.notif-item-body { flex: 1; min-width: 0; }
+.notif-item-title { font-size: 13px; line-height: 1.4; }
+.notif-item-actions { display: flex; gap: 8px; margin-top: 8px; }
+.notif-accept { height: 30px; padding: 0 14px; background: #00B894; border: none; border-radius: 8px; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.notif-decline { height: 30px; padding: 0 12px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.notif-empty { padding: 16px 12px; font-size: 13px; color: var(--text-2); }
 
 @media (max-width: 900px) {
   .period { display: none; }

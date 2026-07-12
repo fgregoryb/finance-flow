@@ -2,11 +2,37 @@
 import { brl } from '~/composables/useStore'
 import { useFinance } from '~/composables/useFinance'
 import { useDisplay } from '~/composables/useDisplay'
+import { usePeriod } from '~/composables/usePeriod'
 
 definePageMeta({ crumb: 'Relatórios', title: 'Relatórios' })
 
 const { disp } = useDisplay()
-const { catDespesas, resumo } = useFinance()
+const { label: periodLabel } = usePeriod()
+const { catDespesas, resumo, grupos } = useFinance()
+
+// ---- exportações ----
+function exportarCSV() {
+  const linhas = [['Data', 'Descrição', 'Tipo', 'Categoria', 'Moeda', 'Valor', 'Valor (BRL)', 'Recorrente']]
+  for (const g of grupos.value) {
+    for (const t of g.items) {
+      linhas.push([
+        t.date, t.desc, t.type === 'income' ? 'Receita' : 'Despesa', t.category,
+        t.currency, String(t.amount).replace('.', ','), String(t.amountBrl).replace('.', ','),
+        t.recurring ? 'Sim' : 'Não',
+      ])
+    }
+  }
+  const csv = linhas.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `financeflow-${periodLabel.value.toLowerCase().replace(' ', '-')}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+function exportarPDF() {
+  window.print() // no diálogo, escolha "Salvar como PDF"
+}
 const catRows = computed(() =>
   catDespesas.value.items.map((it) => ({
     name: it.name,
@@ -32,8 +58,8 @@ const tabs = [
         <button v-for="t in tabs" :key="t.id" class="tab" :class="{ 'is-active': tab === t.id }" @click="tab = t.id">{{ t.label }}</button>
       </div>
       <div class="rep-export">
-        <button class="export-btn"><Icon name="filePdf" :size="15" color="#F03A5C" />Exportar PDF</button>
-        <button class="export-btn"><Icon name="download" :size="15" color="#00A88A" />Exportar CSV</button>
+        <button class="export-btn" @click="exportarPDF"><Icon name="filePdf" :size="15" color="#F03A5C" />Exportar PDF</button>
+        <button class="export-btn" @click="exportarCSV"><Icon name="download" :size="15" color="#00A88A" />Exportar CSV</button>
       </div>
     </div>
 
@@ -46,7 +72,7 @@ const tabs = [
     <div class="card" style="padding:22px">
       <template v-if="tab === 'fluxo'">
         <h3 class="h3" style="margin-bottom:4px">Fluxo de caixa acumulado</h3>
-        <p class="block-sub">Receitas e despesas acumuladas — junho 2026</p>
+        <p class="block-sub">Receitas e despesas acumuladas — {{ periodLabel.toLowerCase() }}</p>
         <ChartsLineChart />
         <div class="legend">
           <span class="leg"><span class="leg-dot" style="background:#00D2A0" />Receitas</span>

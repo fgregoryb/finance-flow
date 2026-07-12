@@ -1,21 +1,30 @@
 <script setup lang="ts">
-// Fluxo de caixa acumulado do mês (ECharts), derivado da store e na moeda de exibição.
+// Fluxo de caixa acumulado do mês selecionado (ECharts), na moeda de exibição.
+// Considera apenas lançamentos pessoais (contas 'casal' têm visão própria).
 import { useStore } from '~/composables/useStore'
 import { useDisplay } from '~/composables/useDisplay'
+import { usePeriod } from '~/composables/usePeriod'
 
 const store = useStore()
 const { currency } = useDisplay()
+const { period } = usePeriod()
+
+const MES_ABREV = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+const mesLabel = computed(() => MES_ABREV[period.value.m])
 
 const data = computed(() => {
   const conv = (v: number) => (currency.value === 'USD' ? v / store.usdBrl : v)
-  const days = Array.from({ length: 30 }, (_, i) => i + 1)
+  const casalIds = new Set(store.checking.filter((c) => c.type === 'casal').map((c) => c.id))
+  const pessoais = store.transactions.filter((t) => !t.context || t.context === 'Pessoal' || !casalIds.has(t.context))
+  const totalDias = new Date(period.value.y, period.value.m + 1, 0).getDate()
+  const days = Array.from({ length: totalDias }, (_, i) => i + 1)
   const labels = days.map((d) => String(d).padStart(2, '0'))
   let rec = 0, desp = 0
   const recCum: number[] = [], despCum: number[] = []
   for (const d of days) {
-    for (const t of store.transactions) {
+    for (const t of pessoais) {
       const dt = new Date(t.date + 'T12:00:00')
-      if (dt.getFullYear() === 2026 && dt.getMonth() === 5 && dt.getDate() === d) {
+      if (dt.getFullYear() === period.value.y && dt.getMonth() === period.value.m && dt.getDate() === d) {
         if (t.type === 'income') rec += t.amountBrl
         else desp += t.amountBrl
       }
@@ -34,7 +43,7 @@ const option = computed(() => ({
   xAxis: {
     type: 'category', data: data.value.labels, boundaryGap: false,
     axisLine: { lineStyle: { color: '#E6E8F0' } }, axisTick: { show: false },
-    axisLabel: { color: '#6B7088', fontFamily: 'Inter', fontSize: 10, interval: 6, formatter: (v: string) => v + ' jun' },
+    axisLabel: { color: '#6B7088', fontFamily: 'Inter', fontSize: 10, interval: 6, formatter: (v: string) => v + ' ' + mesLabel.value },
   },
   yAxis: {
     type: 'value', splitLine: { lineStyle: { color: '#EEF0F6' } },

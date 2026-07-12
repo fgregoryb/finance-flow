@@ -150,6 +150,45 @@ function exportarJSON() {
   URL.revokeObjectURL(a.href)
 }
 
+function exportarPDF() {
+  window.print() // no diálogo do navegador, escolha "Salvar como PDF"
+}
+
+// ---- deletar conta (confirmação dupla) ----
+const deletando = ref(false)
+async function deletarConta() {
+  const ok1 = await confirmar({
+    title: 'Deletar conta',
+    message: 'Isso remove PERMANENTEMENTE todos os seus lançamentos, investimentos e contas. Deseja continuar?',
+    confirmLabel: 'Continuar',
+  })
+  if (!ok1) return
+  const ok2 = await confirmar({
+    title: 'Confirmação final',
+    message: 'Última chance: seus dados serão apagados da nuvem e deste dispositivo, sem volta. Confirma a exclusão?',
+    confirmLabel: 'Apagar tudo',
+  })
+  if (!ok2) return
+
+  deletando.value = true
+  try {
+    const supabase = useSupabaseClient()
+    const user = useSupabaseUser()
+    if (user.value) {
+      // RLS garante que só as linhas do próprio usuário são afetadas
+      await supabase.from('transactions').delete().eq('user_id', user.value.id)
+      await supabase.from('user_state').delete().eq('user_id', user.value.id)
+      localStorage.removeItem(`ff_state:${user.value.id}`)
+      await supabase.auth.signOut()
+    }
+    navigateTo('/login')
+  } catch (e) {
+    console.warn('[conta] falha ao deletar:', e)
+  } finally {
+    deletando.value = false
+  }
+}
+
 const importInput = ref<HTMLInputElement>()
 const importMsg = ref('')
 function escolherImport() { importInput.value?.click() }
@@ -298,11 +337,11 @@ function importarJSON(e: Event) {
         <h3 class="h3" style="margin-bottom:18px">Dados e Privacidade</h3>
         <div class="data-row"><div style="flex:1"><div class="notif-title">Backup dos dados</div><div class="notif-sub">Baixe um JSON com tudo (lançamentos, investimentos, contas) — ou restaure um backup</div></div><div style="display:flex; gap:8px"><button class="btn-soft" @click="escolherImport">Importar</button><button class="btn-soft" @click="exportarJSON">Exportar JSON</button></div><input ref="importInput" type="file" accept="application/json" hidden @change="importarJSON" /></div>
         <p v-if="importMsg" style="font-size:13px; color:#00A88A; font-weight:600; margin:-4px 0 12px">{{ importMsg }}</p>
-        <div class="data-row" style="margin-bottom:24px"><div style="flex:1"><div class="notif-title">Relatório completo</div><div class="notif-sub">PDF com todo o histórico financeiro</div></div><button class="btn-soft" @click="exportarJSON">Exportar PDF</button></div>
+        <div class="data-row" style="margin-bottom:24px"><div style="flex:1"><div class="notif-title">Relatório completo</div><div class="notif-sub">Imprime a tela atual — no diálogo, escolha "Salvar como PDF"</div></div><button class="btn-soft" @click="exportarPDF">Exportar PDF</button></div>
         <div class="danger-zone">
           <div class="danger-title">Deletar conta</div>
           <div class="danger-sub">Esta ação é permanente e remove todos os seus dados. Pede confirmação dupla.</div>
-          <button class="btn-danger">Deletar minha conta</button>
+          <button class="btn-danger" :disabled="deletando" @click="deletarConta">{{ deletando ? 'Removendo dados…' : 'Deletar minha conta' }}</button>
         </div>
       </div>
     </div>

@@ -16,7 +16,7 @@ const { invest } = useFinance()
 const { disp } = useDisplay()
 const { refresh, atualizando, ultimaAtualizacao, erro } = useQuotes()
 
-const TIPOS = ['Renda Fixa', 'Tesouro Direto', 'Ações', 'FIIs', 'ETFs', 'Cripto', 'Internacional', 'Outros']
+const TIPOS = ['Renda Fixa', 'Tesouro Direto', 'Ações', 'FIIs', 'ETFs', 'Cripto', 'Caixinhas', 'Internacional', 'Outros']
 const filtros = computed(() => ['Todos', ...new Set(invest.value.rows.map((r) => r.type))])
 const filtroAtivo = ref('Todos')
 const rowsFiltradas = computed(() =>

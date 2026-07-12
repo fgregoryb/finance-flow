@@ -3,6 +3,17 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   devtools: { enabled: false },
   ssr: true,
+  // Rotas internas (autenticadas) são 100% client-side: os dados chegam após o
+  // login, então renderizá-las no servidor só gerava mismatches de hidratação
+  // (layout "desformatado" até remontar). Auth continua com SSR.
+  routeRules: {
+    '/': { ssr: false },
+    '/lancamentos': { ssr: false },
+    '/investimentos': { ssr: false },
+    '/relatorios': { ssr: false },
+    '/configuracoes': { ssr: false },
+    '/contas-conjuntas': { ssr: false },
+  },
   css: ['~/assets/css/main.css'],
   modules: ['@nuxtjs/supabase'],
 
