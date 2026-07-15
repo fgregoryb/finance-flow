@@ -1,22 +1,38 @@
 /** Derivações reativas a partir da store (totais, gráficos, agrupamentos). */
 import { computed } from 'vue'
-import { useStore, catMeta, hexRgba, type Tx } from './useStore'
-import { usePeriod } from './usePeriod'
+import { useStore, catMeta, hexRgba, occurrenceIn, type Tx } from './useStore'
+import { usePeriod, todayISO } from './usePeriod'
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
+/**
+ * Lançamentos que caem no mês (y, m): os reais daquele mês + as projeções dos
+ * recorrentes iniciados antes dele. É isso que faz uma assinatura lançada em
+ * junho continuar aparecendo em julho, agosto, ...
+ */
+export function txsInMonth(list: Tx[], y: number, m: number): Tx[] {
+  const out: Tx[] = []
+  for (const t of list) {
+    const d = new Date(t.date + 'T12:00:00') // evita shift de fuso (UTC → dia anterior)
+    if (d.getFullYear() === y && d.getMonth() === m) { out.push(t); continue }
+    const occ = occurrenceIn(t, y, m)
+    if (occ) out.push(occ)
+  }
+  return out
+}
+
 export function useFinance() {
   const store = useStore()
-  const { period, inPeriod } = usePeriod()
+  const { period } = usePeriod()
   // Visões pessoais = lançamentos pessoais + quaisquer "órfãos" (cujo contexto
   // não corresponde a nenhuma conta 'casal' existente), para nada sumir.
   const casalIds = computed(() => new Set(store.checking.filter((c) => c.type === 'casal').map((c) => c.id)))
   const personal = computed(() =>
     store.transactions.filter((t) => !t.context || t.context === 'Pessoal' || !casalIds.value.has(t.context)),
   )
-  // Visões do mês selecionado no header
-  const txs = computed(() => personal.value.filter((t) => inPeriod(t.date)))
+  // Visões do mês selecionado no header (com as recorrências projetadas nele)
+  const txs = computed(() => txsInMonth(personal.value, period.value.y, period.value.m))
 
   const income = computed(() => txs.value.filter((t) => t.type === 'income'))
   const expense = computed(() => txs.value.filter((t) => t.type === 'expense'))
@@ -81,13 +97,12 @@ export function useFinance() {
       mode === 'Consolidado' ? t.amountBrl : mode === 'BRL' ? (t.currency === 'BRL' ? t.amount : 0) : (t.currency === 'USD' ? t.amount : 0)
     const rec = months.map(() => 0)
     const desp = months.map(() => 0)
-    for (const t of personal.value) {
-      const d = new Date(t.date + 'T12:00:00') // evita shift de fuso (UTC → dia anterior)
-      const idx = months.findIndex((mm) => mm.y === d.getFullYear() && mm.m === d.getMonth())
-      if (idx < 0) continue
-      if (t.type === 'income') rec[idx] += valueFor(t)
-      else desp[idx] += valueFor(t)
-    }
+    months.forEach((mm, idx) => {
+      for (const t of txsInMonth(personal.value, mm.y, mm.m)) {
+        if (t.type === 'income') rec[idx] += valueFor(t)
+        else desp[idx] += valueFor(t)
+      }
+    })
     return { labels: months.map((mm) => MESES[mm.m]), rec, desp }
   }
 
@@ -100,7 +115,7 @@ export function useFinance() {
     }
     return [...byDate.entries()].map(([date, items]) => {
       const subtotal = items.reduce((a, t) => a + (t.type === 'income' ? t.amountBrl : -t.amountBrl), 0)
-      return { date, label: formatDayHeader(date), subtotal, items }
+      return { date, label: formatDayHeader(date, store.profile?.timezone), subtotal, items }
     })
   })
 
@@ -162,9 +177,9 @@ export function useFinance() {
   return { resumo, catDespesas, catReceitas, distrib, serie6, grupos, recent, invest, hexRgba, accountTxs, accountSummary, checkingTotal }
 }
 
-export function formatDayHeader(dateStr: string) {
+export function formatDayHeader(dateStr: string, tz?: string) {
   const d = new Date(dateStr + 'T12:00:00')
-  const hoje = new Date('2026-06-23T12:00:00') // "hoje" do sistema
+  const hoje = new Date(todayISO(tz) + 'T12:00:00')
   const diff = Math.round((+hoje - +d) / 86400000)
   const dia = DIAS[d.getDay()]
   const label = `${dia}, ${String(d.getDate()).padStart(2, '0')} ${MESES[d.getMonth()].toLowerCase()}`

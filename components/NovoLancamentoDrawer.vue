@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useStore, addTransaction, editTransaction, brlCents, catMeta, rateToBrl, activeCurrencies, type TxType, type Currency } from '~/composables/useStore'
+import { todayISO } from '~/composables/usePeriod'
 
 const open = useNovoLancamento()
 const editingId = useEditingTx()
@@ -16,7 +17,7 @@ const bancos = computed(() =>
     label: c.type === 'casal' ? `${c.bank} · ${c.sharedLabel || 'Casal'}` : c.bank,
   })),
 )
-const data = ref('2026-06-23')
+const data = ref(todayISO(store.profile?.timezone))
 const desc = ref('')
 const categoria = ref('')
 const moeda = ref<Currency>('BRL')
@@ -61,7 +62,7 @@ function fechar() {
   editingId.value = null
 }
 function reset() {
-  tipo.value = 'expense'; data.value = '2026-06-23'; desc.value = ''; categoria.value = ''
+  tipo.value = 'expense'; data.value = todayISO(store.profile?.timezone); desc.value = ''; categoria.value = ''
   moeda.value = 'BRL'; valor.value = null; recorrente.value = false; notes.value = ''; banco.value = ''; erro.value = ''
 }
 function salvar() {

@@ -36,10 +36,40 @@ export interface Tx {
   currency: Currency
   amount: number // valor na moeda original
   amountBrl: number
-  recurring: boolean
+  recurring: boolean // repete todo mês, a partir de `date`
   notes?: string
   context?: string // 'Pessoal' ou id de conta conjunta
   bankAccountId?: string // conta corrente de origem do pagamento (opcional)
+  // Preenchidos só em projeções (ver occurrenceIn): a ocorrência de um
+  // recorrente nos meses seguintes não é persistida, é derivada do original.
+  seriesId?: string // id do lançamento original que gerou esta projeção
+  virtual?: boolean // true = projeção (não existe na tabela `transactions`)
+}
+
+/** Id do lançamento real por trás de um item da lista (projeção ou não). */
+export function txSeriesId(t: Tx) {
+  return t.seriesId || t.id
+}
+
+/**
+ * Projeta um lançamento recorrente no mês (y, m) — mensal, mesmo dia do mês.
+ * Retorna null quando não se aplica: lançamento não recorrente, mês anterior
+ * ao de origem, ou o próprio mês de origem (que já tem o lançamento real).
+ * Dias inexistentes no mês alvo são presos ao último dia (31 → 30/28).
+ */
+export function occurrenceIn(t: Tx, y: number, m: number): Tx | null {
+  if (!t.recurring) return null
+  const [ty, tm, td] = t.date.split('-').map(Number)
+  if (y * 12 + m <= ty * 12 + (tm - 1)) return null
+  const ultimoDia = new Date(y, m + 1, 0).getDate()
+  const mm = String(m + 1).padStart(2, '0')
+  return {
+    ...t,
+    id: `${t.id}~${y}-${mm}`,
+    date: `${y}-${mm}-${String(Math.min(td, ultimoDia)).padStart(2, '0')}`,
+    seriesId: t.id,
+    virtual: true,
+  }
 }
 
 export interface Inv {

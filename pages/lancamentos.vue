@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useStore, fmtMoney, catMeta, hexRgba, removeTransaction } from '~/composables/useStore'
+import { useStore, fmtMoney, catMeta, hexRgba, removeTransaction, txSeriesId, type Tx } from '~/composables/useStore'
 import { useFinance } from '~/composables/useFinance'
 import { useDisplay } from '~/composables/useDisplay'
 import { abrirNovo, abrirEdicao } from '~/composables/useDrawer'
@@ -18,8 +18,13 @@ function bankName(id?: string) {
   return c.type === 'casal' ? `${c.bank} (${c.sharedLabel || 'Casal'})` : c.bank
 }
 
-async function excluir(id: string, desc: string) {
-  if (await confirmar({ title: 'Excluir lançamento', message: `Tem certeza que deseja excluir "${desc}"?`, confirmLabel: 'Excluir' })) removeTransaction(id)
+// Projeções não existem na tabela: editar/excluir age sobre o lançamento
+// original — ou seja, sobre a série inteira. A mensagem deixa isso explícito.
+async function excluir(t: Tx) {
+  const message = t.virtual
+    ? `"${t.desc}" se repete todo mês a partir do lançamento original. Excluir remove a recorrência inteira, inclusive os meses anteriores. Continuar?`
+    : `Tem certeza que deseja excluir "${t.desc}"?`
+  if (await confirmar({ title: 'Excluir lançamento', message, confirmLabel: 'Excluir' })) removeTransaction(txSeriesId(t))
 }
 
 const tipo = ref<'Todos' | 'Receitas' | 'Despesas'>('Todos')
@@ -89,8 +94,8 @@ const gruposFiltrados = computed(() => {
             <div v-if="t.currency !== 'BRL'" class="tx-conv">≈ {{ disp(t.amountBrl) }}</div>
           </div>
           <div class="tx-actions">
-            <button class="tx-act" title="Editar" @click="abrirEdicao(t.id)"><Icon name="edit" :size="15" color="#6B7088" :stroke="1.8" /></button>
-            <button class="tx-act" title="Excluir" @click="excluir(t.id, t.desc)"><Icon name="trash" :size="15" color="#F03A5C" :stroke="1.8" /></button>
+            <button class="tx-act" title="Editar" @click="abrirEdicao(txSeriesId(t))"><Icon name="edit" :size="15" color="#6B7088" :stroke="1.8" /></button>
+            <button class="tx-act" title="Excluir" @click="excluir(t)"><Icon name="trash" :size="15" color="#F03A5C" :stroke="1.8" /></button>
           </div>
         </div>
       </template>
