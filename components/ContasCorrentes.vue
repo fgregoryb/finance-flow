@@ -15,32 +15,52 @@ const { accountSummary, accountTxs, checkingTotal } = useFinance()
 
 const pessoais = computed(() => store.checking.filter((c) => c.type !== 'casal'))
 const casais = computed(() => store.checking.filter((c) => c.type === 'casal'))
+// Lista única: compartilhadas primeiro, mesmo formato de linha das pessoais
+const contas = computed(() => [...casais.value, ...pessoais.value])
 
-const ICONS = ['home', 'cam', 'car', 'heart', 'cart', 'trending', 'bars', 'film', 'users']
 const CORES = ['#FF6B00', '#8A05BE', '#6C63FF', '#4DABF7', '#00D2A0', '#FFB800', '#FF4D6D', '#8B8FA8']
 const AVATAR_CORES = ['#00D2A0', '#FFB800', '#FF4D6D', '#6C63FF', '#4DABF7', '#A78BFA']
+// Tipos oferecidos no cadastro (os compartilhados viram type:'casal' + sharedLabel)
+const TIPOS_CONTA = ['Pessoal', 'Casal', 'Entre Irmãos', 'Compartilhada (outra)'] as const
 
-// ---- modal nova/editar conta (pessoal ou casal) -----------------------------
+// Saldo exibido: pessoal = saldo manual; compartilhada = saldo inicial + movimentos
+function saldoConta(c: any) {
+  const base = checkingBrl(c)
+  return c.type === 'casal' ? base + accountSummary(c.id).saldo : base
+}
+
+// ---- modal nova/editar conta (layout compacto) ------------------------------
 const modal = ref(false)
 const editId = ref<string | null>(null)
 const form = reactive({
-  tipo: 'pessoal' as 'pessoal' | 'casal',
+  tipoConta: 'Pessoal' as string,
+  customLabel: '',
   bank: '', currency: 'BRL' as Currency, balance: null as number | null, color: CORES[0],
-  icon: 'home', members: [] as SharedMember[], memberInput: '',
+  members: [] as SharedMember[], memberInput: '',
 })
 const erro = ref('')
 
+const ehCompartilhada = computed(() => form.tipoConta !== 'Pessoal')
+const naturezaFinal = computed(() =>
+  form.tipoConta === 'Compartilhada (outra)' ? (form.customLabel.trim() || 'Compartilhada') : form.tipoConta,
+)
+
 function novo() {
   editId.value = null
-  Object.assign(form, { tipo: 'pessoal', bank: '', currency: 'BRL', balance: null, color: CORES[0], icon: 'home', members: [{ name: 'Você', initial: 'V', color: '#00D2A0' }], memberInput: '' })
+  Object.assign(form, { tipoConta: 'Pessoal', customLabel: '', bank: '', currency: 'BRL', balance: null, color: CORES[0], members: [{ name: 'Você', initial: 'V', color: '#00D2A0' }], memberInput: '' })
   erro.value = ''
   modal.value = true
 }
 function editar(c: any) {
   editId.value = c.id
+  const tipo = c.type === 'casal' ? 'casal' : 'pessoal' // fallback p/ contas antigas sem type
+  const label = c.sharedLabel || 'Casal'
+  const tiposConhecidos = TIPOS_CONTA as readonly string[]
   Object.assign(form, {
-    tipo: c.type, bank: c.bank, currency: c.currency || 'BRL', balance: c.balance ?? null,
-    color: c.color, icon: c.icon || 'home', members: c.members ? [...c.members] : [], memberInput: '',
+    tipoConta: tipo === 'pessoal' ? 'Pessoal' : (tiposConhecidos.includes(label) ? label : 'Compartilhada (outra)'),
+    customLabel: tipo === 'casal' && !tiposConhecidos.includes(label) ? label : '',
+    bank: c.bank, currency: c.currency || 'BRL', balance: typeof c.balance === 'number' ? c.balance : 0,
+    color: c.color, members: c.members ? [...c.members] : [], memberInput: '',
   })
   erro.value = ''
   modal.value = true
@@ -55,19 +75,23 @@ function rmMembro(i: number) { form.members.splice(i, 1) }
 
 function salvar() {
   erro.value = ''
-  if (!form.bank.trim()) return (erro.value = form.tipo === 'casal' ? 'Informe o nome da conta.' : 'Informe o banco.')
-  if (form.tipo === 'pessoal' && (form.balance == null || form.balance < 0)) return (erro.value = 'Informe o saldo.')
-  if (form.tipo === 'casal' && form.members.length === 0) return (erro.value = 'Adicione ao menos um membro.')
+  if (!form.bank.trim()) return (erro.value = ehCompartilhada.value ? 'Informe o nome da conta.' : 'Informe o banco.')
+  if (form.balance == null || form.balance < 0) return (erro.value = 'Informe o saldo.')
+  if (ehCompartilhada.value && form.members.length === 0) return (erro.value = 'Adicione ao menos um membro.')
 
+  const base = {
+    bank: form.bank.trim(), currency: form.currency, balance: form.balance!, color: form.color,
+  }
   if (editId.value) {
     editChecking(editId.value, {
-      bank: form.bank.trim(), color: form.color,
-      ...(form.tipo === 'pessoal' ? { currency: form.currency, balance: form.balance! } : { icon: form.icon, members: form.members }),
+      ...base,
+      ...(ehCompartilhada.value ? { sharedLabel: naturezaFinal.value, members: form.members } : {}),
     })
   } else {
     addChecking({
-      bank: form.bank.trim(), color: form.color, type: form.tipo,
-      ...(form.tipo === 'pessoal' ? { currency: form.currency, balance: form.balance! } : { icon: form.icon, members: form.members }),
+      ...base,
+      type: ehCompartilhada.value ? 'casal' : 'pessoal',
+      ...(ehCompartilhada.value ? { sharedLabel: naturezaFinal.value, members: form.members, icon: 'users' } : {}),
     })
   }
   modal.value = false
@@ -111,40 +135,6 @@ async function quitar(a: any) {
       <button class="btn-soft" @click="novo"><Icon name="plus" :size="15" :stroke="2.2" color="#6B7088" />Nova conta</button>
     </div>
 
-    <!-- contas casal (compartilhadas) -->
-    <div v-if="casais.length" class="cards">
-      <div v-for="a in casais" :key="a.id" class="acct-card">
-        <div class="acct-banner" :style="{ background: `linear-gradient(135deg, ${a.color}, ${hexRgba(a.color, 0.78)})` }">
-          <div class="acct-banner-ico"><Icon :name="a.icon || 'users'" :size="20" color="#fff" :stroke="1.9" /></div>
-          <div style="flex:1; min-width:0">
-            <div class="acct-banner-title">{{ a.bank }}</div>
-            <div class="acct-banner-sub">{{ (a.members || []).map(m => m.name).join(' · ') }}</div>
-          </div>
-          <div class="avatars">
-            <span v-for="(m, i) in (a.members || []).slice(0, 4)" :key="i" class="av" :class="{ 'av-stack': i > 0 }" :style="{ background: m.color, color: '#06251d', borderColor: a.color }">{{ m.initial }}</span>
-            <span v-if="(a.members || []).length > 4" class="av av-stack" :style="{ background: '#EEF0F6', color: '#6B7088', borderColor: a.color }">+{{ a.members!.length - 4 }}</span>
-          </div>
-        </div>
-        <div class="acct-body">
-          <div class="acct-stats">
-            <div><div class="acct-stat-label">Receitas</div><div class="acct-stat-val" style="color:#00A88A">{{ disp(accountSummary(a.id).receitas) }}</div></div>
-            <div><div class="acct-stat-label">Despesas</div><div class="acct-stat-val" style="color:#F03A5C">{{ disp(accountSummary(a.id).despesas) }}</div></div>
-            <div><div class="acct-stat-label">Saldo</div><div class="acct-stat-val" :style="{ color: accountSummary(a.id).saldo >= 0 ? '#6C63FF' : '#F03A5C' }">{{ disp(accountSummary(a.id).saldo) }}</div></div>
-          </div>
-          <div class="acct-chips">
-            <span class="chip" style="color:#00A88A; background:rgba(0,210,160,0.12)">BRL {{ disp(accountSummary(a.id).brlPart) }}</span>
-            <span v-if="accountSummary(a.id).usdPart" class="chip" style="color:#2B8FE0; background:rgba(77,171,247,0.12)">USD {{ disp(accountSummary(a.id).usdPart) }}</span>
-            <span class="chip-meta">{{ accountSummary(a.id).count }} lançamentos</span>
-          </div>
-          <div class="acct-actions">
-            <button class="btn-access" @click="detalheId = a.id">Acessar</button>
-            <button class="btn-cog" title="Configurar" @click="editar(a)"><Icon name="cog" :size="17" color="#6B7088" :stroke="1.8" /></button>
-            <button class="btn-cog" title="Excluir" @click="excluir(a)"><Icon name="trash" :size="16" color="#F03A5C" :stroke="1.8" /></button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- quem deve a quem -->
     <div v-for="a in casais.filter(x => x.settle)" :key="a.id + '-settle'" class="settle-card">
       <h3 class="h3" style="margin-bottom:4px; font-size:14px">Divisão · quem deve a quem</h3>
@@ -158,54 +148,66 @@ async function quitar(a: any) {
       </div>
     </div>
 
-    <!-- contas pessoais (bancárias) -->
-    <div v-if="pessoais.length" class="cc-list">
-      <div v-for="c in pessoais" :key="c.id" class="cc-item">
-        <div class="cc-ico" :style="{ background: hexRgba(c.color, 0.16), color: c.color }">{{ c.bank.slice(0, 2).toUpperCase() }}</div>
-        <div class="cc-info"><div class="cc-bank">{{ c.bank }}</div><div class="cc-sub">Conta corrente<span v-if="c.currency === 'USD'"> · US$ {{ c.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) }}</span></div></div>
-        <div class="cc-bal">{{ disp(checkingBrl(c)) }}</div>
+    <!-- contas (pessoais e compartilhadas no mesmo formato) -->
+    <div v-if="contas.length" class="cc-list">
+      <div v-for="c in contas" :key="c.id" class="cc-item">
+        <div class="cc-ico" :style="{ background: hexRgba(c.color, 0.16), color: c.color }">
+          <Icon v-if="c.type === 'casal'" :name="c.icon || 'users'" :size="19" :color="c.color" :stroke="1.9" />
+          <template v-else>{{ c.bank.slice(0, 2).toUpperCase() }}</template>
+        </div>
+        <div class="cc-info">
+          <div class="cc-bank">{{ c.bank }}</div>
+          <div class="cc-sub">
+            <template v-if="c.type === 'casal'">{{ c.sharedLabel || 'Casal' }} · {{ (c.members || []).map(m => m.name).join(' · ') }} · {{ accountSummary(c.id).count }} lançamentos</template>
+            <template v-else>Conta corrente<span v-if="c.currency === 'USD'"> · US$ {{ c.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) }}</span></template>
+          </div>
+        </div>
+        <div class="cc-bal">{{ disp(saldoConta(c)) }}</div>
         <div class="cc-actions">
-          <button class="sq-btn" @click="editar(c)"><Icon name="edit" :size="14" color="#6B7088" :stroke="1.8" /></button>
-          <button class="sq-btn" @click="excluir(c)"><Icon name="trash" :size="14" color="#F03A5C" :stroke="1.8" /></button>
+          <button v-if="c.type === 'casal'" class="sq-btn" title="Acessar" @click="detalheId = c.id"><Icon name="arrowRight" :size="14" color="#6C63FF" :stroke="2" /></button>
+          <button class="sq-btn" title="Editar" @click="editar(c)"><Icon name="edit" :size="14" color="#6B7088" :stroke="1.8" /></button>
+          <button class="sq-btn" title="Excluir" @click="excluir(c)"><Icon name="trash" :size="14" color="#F03A5C" :stroke="1.8" /></button>
         </div>
       </div>
     </div>
-    <div v-if="!pessoais.length && !casais.length" class="cc-empty">Nenhuma conta ainda. Adicione uma conta pessoal ou uma conta compartilhada (Casal).</div>
+    <div v-else class="cc-empty">Nenhuma conta ainda. Adicione uma conta pessoal ou uma conta compartilhada (Casal).</div>
 
-    <!-- modal nova/editar conta -->
+    <!-- modal nova/editar conta (layout compacto) -->
     <Teleport to="body">
       <div v-if="modal" class="modal-overlay" @click.self="modal = false">
-        <div class="modal">
-          <header class="modal-head"><h3 class="h3">{{ editId ? 'Editar conta' : 'Nova conta' }}</h3><button class="x" @click="modal = false">✕</button></header>
+        <div v-trap="() => (modal = false)" class="modal">
+          <header class="modal-head"><h3 class="h3">{{ editId ? 'Editar conta' : 'Nova conta corrente' }}</h3><button class="x" @click="modal = false">✕</button></header>
           <div class="modal-body">
-            <div class="fld">
+            <label class="fld">
               <span class="fld-label">Tipo de conta</span>
-              <div class="seg">
-                <button class="seg-btn" :class="{ on: form.tipo === 'pessoal' }" :disabled="!!editId" @click="form.tipo = 'pessoal'">Pessoal</button>
-                <button class="seg-btn" :class="{ on: form.tipo === 'casal' }" :disabled="!!editId" @click="form.tipo = 'casal'">Casal (compartilhada)</button>
-              </div>
+              <select v-model="form.tipoConta" class="fld-box">
+                <option v-for="t in TIPOS_CONTA" :key="t" :value="t">{{ t }}</option>
+              </select>
+            </label>
+            <label v-if="form.tipoConta === 'Compartilhada (outra)'" class="fld">
+              <span class="fld-label">Natureza da conta</span>
+              <input v-model="form.customLabel" class="fld-box" placeholder="Ex: República, Viagem, Sócios" />
+            </label>
+
+            <label class="fld"><span class="fld-label">{{ ehCompartilhada ? 'Nome da conta' : 'Banco' }}</span><input v-model="form.bank" class="fld-box" :placeholder="ehCompartilhada ? 'Ex: I & G, Casa da Praia' : 'Ex: Itaú, Nubank'" /></label>
+
+            <div class="fld">
+              <span class="fld-label">Moeda</span>
+              <div class="seg"><button class="seg-btn" :class="{ on: form.currency === 'BRL' }" @click="form.currency = 'BRL'">BRL</button><button class="seg-btn" :class="{ on: form.currency === 'USD' }" @click="form.currency = 'USD'">USD</button></div>
             </div>
+            <label class="fld">
+              <span class="fld-label">{{ ehCompartilhada ? `Saldo inicial (${form.currency})` : `Saldo (${form.currency})` }}</span>
+              <input v-model.number="form.balance" type="number" step="0.01" min="0" class="fld-box" placeholder="0,00" />
+              <span v-if="ehCompartilhada" class="fld-hint">Os lançamentos vinculados à conta somam por cima deste valor.</span>
+            </label>
 
-            <label class="fld"><span class="fld-label">{{ form.tipo === 'casal' ? 'Nome da conta' : 'Banco' }}</span><input v-model="form.bank" class="fld-box" :placeholder="form.tipo === 'casal' ? 'Ex: Casal, República' : 'Ex: Itaú, Nubank'" /></label>
-
-            <template v-if="form.tipo === 'pessoal'">
-              <div class="fld">
-                <span class="fld-label">Moeda</span>
-                <div class="seg"><button class="seg-btn" :class="{ on: form.currency === 'BRL' }" @click="form.currency = 'BRL'">BRL</button><button class="seg-btn" :class="{ on: form.currency === 'USD' }" @click="form.currency = 'USD'">USD</button></div>
+            <div v-if="ehCompartilhada" class="fld">
+              <span class="fld-label">Membros</span>
+              <div class="member-chips">
+                <span v-for="(m, i) in form.members" :key="i" class="member-chip"><span class="av-sm" :style="{ background: m.color }">{{ m.initial }}</span>{{ m.name }}<button class="chip-x" @click="rmMembro(i)">✕</button></span>
               </div>
-              <label class="fld"><span class="fld-label">Saldo ({{ form.currency }})</span><input v-model.number="form.balance" type="number" step="0.01" min="0" class="fld-box" placeholder="0,00" /></label>
-            </template>
-
-            <template v-else>
-              <div class="fld"><span class="fld-label">Ícone</span><div class="picker"><button v-for="ic in ICONS" :key="ic" class="pick-ico" :class="{ on: form.icon === ic }" :style="form.icon === ic ? { borderColor: form.color, background: hexRgba(form.color, 0.12) } : {}" @click="form.icon = ic"><Icon :name="ic" :size="18" :color="form.color" :stroke="1.8" /></button></div></div>
-              <div class="fld">
-                <span class="fld-label">Membros</span>
-                <div class="member-chips">
-                  <span v-for="(m, i) in form.members" :key="i" class="member-chip"><span class="av-sm" :style="{ background: m.color }">{{ m.initial }}</span>{{ m.name }}<button class="chip-x" @click="rmMembro(i)">✕</button></span>
-                </div>
-                <div class="member-add"><input v-model="form.memberInput" class="fld-box" placeholder="Nome do membro" @keyup.enter="addMembro" /><button class="btn-soft-sm" @click="addMembro">Adicionar</button></div>
-              </div>
-            </template>
+              <div class="member-add"><input v-model="form.memberInput" class="fld-box" placeholder="Nome do membro" @keyup.enter="addMembro" /><button class="btn-soft-sm" @click="addMembro">Adicionar</button></div>
+            </div>
 
             <div class="fld">
               <span class="fld-label">Cor</span>
@@ -221,7 +223,7 @@ async function quitar(a: any) {
     <!-- modal acessar conta casal -->
     <Teleport to="body">
       <div v-if="contaDetalhe" class="modal-overlay" @click.self="detalheId = null">
-        <div class="modal lg">
+        <div v-trap="() => (detalheId = null)" class="modal lg">
           <header class="modal-head" :style="{ background: `linear-gradient(135deg, ${contaDetalhe.color}, ${hexRgba(contaDetalhe.color, 0.78)})` }">
             <div style="display:flex; align-items:center; gap:12px">
               <div class="acct-banner-ico"><Icon :name="contaDetalhe.icon || 'users'" :size="20" color="#fff" :stroke="1.9" /></div>
@@ -271,26 +273,9 @@ async function quitar(a: any) {
 .btn-green { height: 36px; padding: 0 16px; background: #00B894; border: none; border-radius: 9px; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .btn-ghost { height: 36px; padding: 0 14px; background: transparent; border: 1px solid var(--border); border-radius: 9px; color: var(--text-2); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
 
-.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.acct-card { overflow: hidden; border-radius: 14px; border: 1px solid var(--border-soft); }
-.acct-banner { padding: 16px 18px; display: flex; align-items: center; gap: 12px; }
 .acct-banner-ico { width: 40px; height: 40px; flex: none; border-radius: 11px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; }
-.acct-banner-title { font-size: 16px; font-weight: 700; color: #fff; }
-.acct-banner-sub { font-size: 11px; color: rgba(255,255,255,0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.avatars { display: flex; flex: none; }
-.av { width: 28px; height: 28px; border-radius: 50%; border: 2px solid; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-.av-stack { margin-left: -8px; }
-
-.acct-body { padding: 16px 18px; background: var(--surface); }
-.acct-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
 .acct-stat-label { font-size: 11px; color: var(--text-2); margin-bottom: 3px; }
 .acct-stat-val { font-size: 14px; font-weight: 700; }
-.acct-chips { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-.chip { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; }
-.chip-meta { margin-left: auto; font-size: 11px; color: var(--text-3); }
-.acct-actions { display: flex; gap: 8px; }
-.btn-access { flex: 1; height: 36px; background: #6C63FF; border: none; border-radius: 9px; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-.btn-cog { width: 36px; height: 36px; background: var(--surface-3); border: none; border-radius: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
 .settle-card { padding: 16px 18px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 12px; }
 .settle-sub { margin: 0 0 12px; font-size: 12px; color: var(--text-2); }
@@ -322,6 +307,7 @@ async function quitar(a: any) {
 .fld-label { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 7px; }
 .fld-box { height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-family: inherit; font-size: 14px; color: var(--text); outline: none; }
 .fld-box:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.fld-hint { font-size: 11px; color: var(--text-3); margin-top: 6px; }
 .seg { display: flex; gap: 3px; background: var(--surface-3); border-radius: 10px; padding: 3px; }
 .seg-btn { flex: 1; padding: 9px; border: none; border-radius: 7px; background: transparent; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer; }
 .seg-btn.on { background: var(--accent); color: #fff; }
@@ -349,6 +335,4 @@ async function quitar(a: any) {
 .det-tx-val { font-size: 14px; font-weight: 700; }
 .det-tx-actions { display: flex; gap: 4px; }
 .sq-mini { width: 28px; height: 28px; border-radius: 8px; background: var(--surface-3); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-
-@media (max-width: 1100px) { .cards { grid-template-columns: 1fr; } }
 </style>

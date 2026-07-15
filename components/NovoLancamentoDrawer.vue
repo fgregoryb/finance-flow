@@ -9,8 +9,13 @@ const store = useStore()
 const tipo = ref<TxType>('expense')
 const conta = ref('Pessoal')
 const contas = computed(() => [{ id: 'Pessoal', name: 'Pessoal' }, ...store.checking.filter((c) => c.type === 'casal').map((c) => ({ id: c.id, name: c.bank }))])
-// Contas bancárias reais (não conjuntas) — usadas para vincular a origem do pagamento.
-const bancos = computed(() => store.checking.filter((c) => c.type !== 'casal'))
+// Todas as contas bancárias, identificadas pelo tipo — origem/destino do dinheiro.
+const bancos = computed(() =>
+  store.checking.map((c) => ({
+    id: c.id,
+    label: c.type === 'casal' ? `${c.bank} · ${c.sharedLabel || 'Casal'}` : c.bank,
+  })),
+)
 const data = ref('2026-06-23')
 const desc = ref('')
 const categoria = ref('')
@@ -75,16 +80,13 @@ function salvar() {
   fechar()
 }
 
-function onKey(e: KeyboardEvent) { if (e.key === 'Escape') fechar() }
-onMounted(() => window.addEventListener('keydown', onKey))
-onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="drawer">
       <div v-if="open" class="overlay" @click.self="fechar">
-        <aside class="drawer" :class="tipo === 'income' ? 'is-income' : 'is-expense'">
+        <aside v-trap="fechar" class="drawer" :class="tipo === 'income' ? 'is-income' : 'is-expense'">
           <header class="drawer-head">
             <h3 class="drawer-title">{{ editando ? 'Editar lançamento' : 'Novo lançamento' }}</h3>
             <button class="drawer-close" @click="fechar" aria-label="Fechar">✕</button>
@@ -123,7 +125,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               <span class="fld-label">{{ tipo === 'expense' ? 'Pago com (conta bancária)' : 'Recebido em (conta bancária)' }}</span>
               <select v-model="banco" class="fld-box">
                 <option value="">Não vincular</option>
-                <option v-for="c in bancos" :key="c.id" :value="c.id">{{ c.bank }}</option>
+                <option v-for="c in bancos" :key="c.id" :value="c.id">{{ c.label }}</option>
               </select>
             </label>
 

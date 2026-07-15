@@ -62,7 +62,7 @@ const previewStyle = computed(() => ({
 <template>
   <Teleport to="body">
     <div class="ov" @click.self="emit('close')">
-      <div class="box">
+      <div v-trap="() => emit('close')" class="box">
         <header class="hd"><h3 class="h3">Ajustar foto</h3><button class="x" @click="emit('close')">✕</button></header>
         <div class="body">
           <div ref="frame" class="frame" :style="previewStyle" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointerleave="onUp">

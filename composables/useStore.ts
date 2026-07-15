@@ -72,14 +72,15 @@ export interface SharedAccount {
 export type AccountType = 'pessoal' | 'casal'
 export interface CheckingAccount {
   id: string
-  bank: string // nome do banco (pessoal) ou da conta compartilhada (casal)
-  balance: number // saldo manual — só usado quando type === 'pessoal'
+  bank: string // nome do banco (pessoal) ou da conta compartilhada
+  balance: number // saldo manual (para compartilhadas, é o saldo inicial)
   currency: Currency
   color: string
   type: AccountType
-  icon?: string // ícone da conta (relevante para 'casal')
-  members?: SharedMember[] // membros da conta compartilhada (só 'casal')
-  settle?: { from: string; to: string; amount: number } | null // "quem deve a quem" (só 'casal')
+  sharedLabel?: string // natureza da conta compartilhada: 'Casal', 'Entre Irmãos', ...
+  icon?: string // ícone da conta (relevante para compartilhadas)
+  members?: SharedMember[] // membros da conta compartilhada
+  settle?: { from: string; to: string; amount: number } | null // "quem deve a quem"
 }
 
 // ---- metadados de categoria (ícone + cor) -----------------------------------
@@ -299,6 +300,7 @@ function migrateSharedIntoChecking() {
           currency: s.mainCurrency || 'BRL',
           color: s.color,
           type: 'casal',
+          sharedLabel: 'Casal',
           icon: s.icon,
           members: s.members,
           settle: s.settle ?? null,
@@ -307,6 +309,16 @@ function migrateSharedIntoChecking() {
     }
   }
   delete (state as any).shared
+
+  // Normalização: contas criadas antes do campo `type` existir ficavam sem ele,
+  // o que fazia o formulário de edição abrir no modo errado (sem campo de saldo).
+  state.checking = state.checking.map((c: any) => ({
+    ...c,
+    type: c.type === 'casal' ? 'casal' : 'pessoal',
+    balance: typeof c.balance === 'number' ? c.balance : 0,
+    currency: c.currency || 'BRL',
+    sharedLabel: c.type === 'casal' ? (c.sharedLabel || 'Casal') : undefined,
+  }))
 }
 
 /**
@@ -462,17 +474,23 @@ export function removeInvestment(id: string) {
   if (i >= 0) state.investments.splice(i, 1)
 }
 
-// ---- contas correntes (tipo 'pessoal' ou 'casal') ---------------------------
-/** Cria uma conta corrente. Contas 'casal' recebem membros e ficam sem saldo manual (é calculado dos lançamentos). */
-export function addChecking(input: { bank: string; currency?: Currency; color?: string; type?: AccountType; balance?: number; icon?: string; members?: SharedMember[] }) {
+// ---- contas correntes (pessoais ou compartilhadas) ---------------------------
+/**
+ * Cria uma conta corrente. Saldo e moeda valem para qualquer tipo; contas
+ * compartilhadas ganham natureza (sharedLabel: 'Casal', 'Entre Irmãos', ...)
+ * e membros, e o saldo informado funciona como saldo inicial (os lançamentos
+ * vinculados somam por cima).
+ */
+export function addChecking(input: { bank: string; currency?: Currency; color?: string; type?: AccountType; sharedLabel?: string; balance?: number; icon?: string; members?: SharedMember[] }) {
   const type = input.type || 'pessoal'
   state.checking.push({
     id: uid(),
     bank: input.bank,
-    balance: type === 'casal' ? 0 : input.balance ?? 0,
+    balance: input.balance ?? 0,
     currency: input.currency || 'BRL',
     color: input.color || '#6C63FF',
     type,
+    sharedLabel: type === 'casal' ? (input.sharedLabel || 'Casal') : undefined,
     icon: input.icon,
     members: type === 'casal' ? (input.members || []) : undefined,
     settle: type === 'casal' ? null : undefined,

@@ -7,7 +7,7 @@ const s = useConfirmState()
   <Teleport to="body">
     <Transition name="cfm">
       <div v-if="s.open" class="cfm-overlay" @click.self="resolveConfirm(false)">
-        <div class="cfm">
+        <div v-trap="() => resolveConfirm(false)" class="cfm">
           <div class="cfm-ico" :class="{ danger: s.danger }">
             <Icon :name="s.danger ? 'trash' : 'bell'" :size="22" :color="s.danger ? '#F03A5C' : '#6C63FF'" :stroke="1.8" />
           </div>

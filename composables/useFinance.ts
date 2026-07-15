@@ -149,11 +149,13 @@ export function useFinance() {
   }
 
   // ----- contas correntes -----
-  // Pessoal: saldo manual (convertido p/ BRL). Casal: saldo calculado dos lançamentos vinculados.
+  // Pessoal: saldo manual (convertido p/ BRL).
+  // Compartilhada: saldo inicial manual + movimentos dos lançamentos vinculados.
+  const balanceBrl = (c: any) => (c.currency === 'USD' ? c.balance * store.usdBrl : c.balance)
   const checkingTotal = computed(() =>
     store.checking.reduce((a, c) => {
-      if (c.type === 'casal') return a + accountSummary(c.id).saldo
-      return a + (c.currency === 'USD' ? c.balance * store.usdBrl : c.balance)
+      if (c.type === 'casal') return a + balanceBrl(c) + accountSummary(c.id).saldo
+      return a + balanceBrl(c)
     }, 0),
   )
 

@@ -349,7 +349,7 @@ function importarJSON(e: Event) {
     <!-- Modal categoria -->
     <Teleport to="body">
       <div v-if="catModal" class="modal-overlay" @click.self="catModal = false">
-        <div class="modal">
+        <div v-trap="() => (catModal = false)" class="modal">
           <header class="modal-head">
             <h3 class="h3">{{ catEditando ? 'Editar categoria' : 'Nova categoria' }} ({{ catTipo === 'expense' ? 'Despesa' : 'Receita' }})</h3>
             <button class="drawer-close" @click="catModal = false">✕</button>

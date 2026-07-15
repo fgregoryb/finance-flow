@@ -13,7 +13,9 @@ const store = useStore()
 
 function bankName(id?: string) {
   if (!id) return ''
-  return store.checking.find((c) => c.id === id)?.bank || ''
+  const c = store.checking.find((x) => x.id === id)
+  if (!c) return ''
+  return c.type === 'casal' ? `${c.bank} (${c.sharedLabel || 'Casal'})` : c.bank
 }
 
 async function excluir(id: string, desc: string) {

@@ -63,13 +63,11 @@ async function salvar() {
     name: form.name, broker: form.broker, type: form.type, currency: form.currency,
     invested: form.invested,
     current: form.auto ? (form.current || form.invested) : form.current!,
-    type_: undefined,
     ticker: form.auto ? form.ticker : undefined,
     quoteSource: (form.auto ? 'crypto' : 'manual') as 'crypto' | 'manual',
     qty: form.auto ? form.qty! : undefined,
     updatedAt: new Date().toISOString().slice(0, 10),
   }
-  delete (payload as any).type_
   if (editId.value) editInvestment(editId.value, payload)
   else addInvestment(payload as any)
   modalAberto.value = false
@@ -167,7 +165,7 @@ onUnmounted(() => clearInterval(timer))
     <!-- Modal novo/editar investimento -->
     <Teleport to="body">
       <div v-if="modalAberto" class="modal-overlay" @click.self="modalAberto = false">
-        <div class="modal">
+        <div v-trap="() => (modalAberto = false)" class="modal">
           <header class="modal-head">
             <h3 class="drawer-title">{{ editId ? 'Editar investimento' : 'Novo investimento' }}</h3>
             <button class="drawer-close" @click="modalAberto = false">✕</button>
