@@ -22,39 +22,78 @@ export function txsInMonth(list: Tx[], y: number, m: number): Tx[] {
   return out
 }
 
+const sum = (arr: Tx[], f: (t: Tx) => number) => arr.reduce((a, t) => a + f(t), 0)
+
+/** Totais (receitas/despesas/saldo) de uma lista qualquer de lançamentos. */
+export function resumoDe(list: Tx[]) {
+  const income = list.filter((t) => t.type === 'income')
+  const expense = list.filter((t) => t.type === 'expense')
+  const recBrl = sum(income, (t) => t.amountBrl)
+  const despBrl = sum(expense, (t) => t.amountBrl)
+  const saldo = recBrl - despBrl
+  return {
+    receitas: { total: recBrl, brl: sum(income.filter((t) => t.currency === 'BRL'), (t) => t.amount), usd: sum(income.filter((t) => t.currency === 'USD'), (t) => t.amount) },
+    despesas: { total: despBrl, brl: sum(expense.filter((t) => t.currency === 'BRL'), (t) => t.amount), usd: sum(expense.filter((t) => t.currency === 'USD'), (t) => t.amount) },
+    saldo,
+    gastoPct: recBrl ? Math.round((despBrl / recBrl) * 100) : 0,
+    sobrouPct: recBrl ? Math.round((saldo / recBrl) * 100) : 0,
+    disponivel: saldo,
+  }
+}
+
+/** Agrupa por dia (desc), com subtotal — de uma lista qualquer de lançamentos. */
+export function gruposDe(list: Tx[], tz?: string) {
+  const byDate = new Map<string, Tx[]>()
+  for (const t of [...list].sort((a, b) => b.date.localeCompare(a.date))) {
+    if (!byDate.has(t.date)) byDate.set(t.date, [])
+    byDate.get(t.date)!.push(t)
+  }
+  return [...byDate.entries()].map(([date, items]) => ({
+    date,
+    label: formatDayHeader(date, tz),
+    subtotal: items.reduce((a, t) => a + (t.type === 'income' ? t.amountBrl : -t.amountBrl), 0),
+    items,
+  }))
+}
+
 export function useFinance() {
   const store = useStore()
   const { period } = usePeriod()
   // Visões pessoais = lançamentos pessoais + quaisquer "órfãos" (cujo contexto
   // não corresponde a nenhuma conta 'casal' existente), para nada sumir.
   const casalIds = computed(() => new Set(store.checking.filter((c) => c.type === 'casal').map((c) => c.id)))
-  const personal = computed(() =>
-    store.transactions.filter((t) => !t.context || t.context === 'Pessoal' || !casalIds.value.has(t.context)),
-  )
+  const ehPessoal = (t: Tx) => !t.context || t.context === 'Pessoal' || !casalIds.value.has(t.context)
+  const personal = computed(() => store.transactions.filter(ehPessoal))
   // Visões do mês selecionado no header (com as recorrências projetadas nele)
   const txs = computed(() => txsInMonth(personal.value, period.value.y, period.value.m))
+  // Tudo do mês, inclusive contas compartilhadas (a tela de Lançamentos escolhe
+  // o escopo pelo filtro de conta; Dashboard e Relatórios seguem pessoais).
+  const todosTxs = computed(() => txsInMonth(store.transactions, period.value.y, period.value.m))
+
+  /** Lançamentos do mês no escopo pedido: 'Todas' | 'Pessoal' | id de conta. */
+  function escopoTxs(contaId: string) {
+    if (contaId === 'Pessoal') return txs.value
+    if (contaId === 'Todas') return todosTxs.value
+    return todosTxs.value.filter((t) => t.context === contaId)
+  }
+
+  /** Contas oferecidas no filtro da tela de Lançamentos. */
+  const contasFiltro = computed(() => [
+    { id: 'Todas', name: 'Todas as contas' },
+    { id: 'Pessoal', name: 'Pessoal' },
+    ...store.checking.filter((c) => c.type === 'casal').map((c) => ({ id: c.id, name: c.bank })),
+  ])
+
+  /** Nome da conta compartilhada de um lançamento ('' quando é pessoal). */
+  function contextName(ctx?: string) {
+    if (!ctx || ctx === 'Pessoal') return ''
+    return store.checking.find((c) => c.id === ctx && c.type === 'casal')?.bank || ''
+  }
 
   const income = computed(() => txs.value.filter((t) => t.type === 'income'))
   const expense = computed(() => txs.value.filter((t) => t.type === 'expense'))
-  const sum = (arr: Tx[], f: (t: Tx) => number) => arr.reduce((a, t) => a + f(t), 0)
 
-  const resumo = computed(() => {
-    const recBrl = sum(income.value, (t) => t.amountBrl)
-    const despBrl = sum(expense.value, (t) => t.amountBrl)
-    const recBRLorig = sum(income.value.filter((t) => t.currency === 'BRL'), (t) => t.amount)
-    const recUSDorig = sum(income.value.filter((t) => t.currency === 'USD'), (t) => t.amount)
-    const despBRLorig = sum(expense.value.filter((t) => t.currency === 'BRL'), (t) => t.amount)
-    const despUSDorig = sum(expense.value.filter((t) => t.currency === 'USD'), (t) => t.amount)
-    const saldo = recBrl - despBrl
-    return {
-      receitas: { total: recBrl, brl: recBRLorig, usd: recUSDorig },
-      despesas: { total: despBrl, brl: despBRLorig, usd: despUSDorig },
-      saldo,
-      gastoPct: recBrl ? Math.round((despBrl / recBrl) * 100) : 0,
-      sobrouPct: recBrl ? Math.round((saldo / recBrl) * 100) : 0,
-      disponivel: saldo,
-    }
-  })
+  const resumo = computed(() => resumoDe(txs.value))
 
   // Categorias (donut + ranking)
   function categoria(tipo: 'expense' | 'income') {
@@ -107,17 +146,7 @@ export function useFinance() {
   }
 
   // Lançamentos agrupados por dia (desc)
-  const grupos = computed(() => {
-    const byDate = new Map<string, Tx[]>()
-    for (const t of [...txs.value].sort((a, b) => b.date.localeCompare(a.date))) {
-      if (!byDate.has(t.date)) byDate.set(t.date, [])
-      byDate.get(t.date)!.push(t)
-    }
-    return [...byDate.entries()].map(([date, items]) => {
-      const subtotal = items.reduce((a, t) => a + (t.type === 'income' ? t.amountBrl : -t.amountBrl), 0)
-      return { date, label: formatDayHeader(date, store.profile?.timezone), subtotal, items }
-    })
-  })
+  const grupos = computed(() => gruposDe(txs.value, store.profile?.timezone))
 
   const recent = computed(() =>
     [...txs.value].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
@@ -174,7 +203,11 @@ export function useFinance() {
     }, 0),
   )
 
-  return { resumo, catDespesas, catReceitas, distrib, serie6, grupos, recent, invest, hexRgba, accountTxs, accountSummary, checkingTotal }
+  return {
+    resumo, catDespesas, catReceitas, distrib, serie6, grupos, recent, invest, hexRgba,
+    accountTxs, accountSummary, checkingTotal,
+    escopoTxs, contasFiltro, contextName,
+  }
 }
 
 export function formatDayHeader(dateStr: string, tz?: string) {

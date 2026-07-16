@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { useStore, fmtMoney, catMeta, hexRgba, removeTransaction, txSeriesId, type Tx } from '~/composables/useStore'
-import { useFinance } from '~/composables/useFinance'
+import { useFinance, resumoDe, gruposDe } from '~/composables/useFinance'
 import { useDisplay } from '~/composables/useDisplay'
 import { abrirNovo, abrirEdicao } from '~/composables/useDrawer'
 import { confirmar } from '~/composables/useConfirm'
 
 definePageMeta({ crumb: 'Lançamentos', title: 'Lançamentos' })
 
-const { grupos, resumo } = useFinance()
+const { escopoTxs, contasFiltro, contextName } = useFinance()
 const { disp } = useDisplay()
 const store = useStore()
 
@@ -29,23 +29,28 @@ async function excluir(t: Tx) {
 
 const tipo = ref<'Todos' | 'Receitas' | 'Despesas'>('Todos')
 const moeda = ref<'Todas' | 'BRL' | 'USD'>('Todas')
+const conta = ref('Todas')
 const busca = ref('')
 
-const gruposFiltrados = computed(() => {
-  return grupos.value
-    .map((g) => {
-      const items = g.items.filter((t) => {
-        if (tipo.value === 'Receitas' && t.type !== 'income') return false
-        if (tipo.value === 'Despesas' && t.type !== 'expense') return false
-        if (moeda.value !== 'Todas' && t.currency !== moeda.value) return false
-        if (busca.value && !`${t.desc} ${t.category} ${t.notes || ''}`.toLowerCase().includes(busca.value.toLowerCase())) return false
-        return true
-      })
-      const subtotal = items.reduce((a, t) => a + (t.type === 'income' ? t.amountBrl : -t.amountBrl), 0)
-      return { ...g, items, subtotal }
-    })
-    .filter((g) => g.items.length)
+// Se a conta selecionada deixar de existir, volta para "Todas" (senão a tela
+// ficaria permanentemente vazia, sem o usuário entender por quê).
+watchEffect(() => {
+  if (!contasFiltro.value.some((c) => c.id === conta.value)) conta.value = 'Todas'
 })
+
+// Escopo = conta escolhida no filtro; os totais do período seguem esse escopo.
+const txsEscopo = computed(() => escopoTxs(conta.value))
+const filtrados = computed(() =>
+  txsEscopo.value.filter((t) => {
+    if (tipo.value === 'Receitas' && t.type !== 'income') return false
+    if (tipo.value === 'Despesas' && t.type !== 'expense') return false
+    if (moeda.value !== 'Todas' && t.currency !== moeda.value) return false
+    if (busca.value && !`${t.desc} ${t.category} ${t.notes || ''}`.toLowerCase().includes(busca.value.toLowerCase())) return false
+    return true
+  }),
+)
+const resumo = computed(() => resumoDe(filtrados.value))
+const gruposFiltrados = computed(() => gruposDe(filtrados.value, store.profile?.timezone))
 </script>
 
 <template>
@@ -58,6 +63,9 @@ const gruposFiltrados = computed(() => {
       <div class="tab-group">
         <button v-for="m in ['Todas','BRL','USD']" :key="m" class="tab" :class="{ 'is-active': moeda === m }" @click="moeda = m as any">{{ m }}</button>
       </div>
+      <select v-model="conta" class="conta-sel" aria-label="Filtrar por conta">
+        <option v-for="c in contasFiltro" :key="c.id" :value="c.id">{{ c.name }}</option>
+      </select>
       <div class="search">
         <Icon name="search" :size="16" color="#A0A3B5" />
         <input v-model="busca" type="text" placeholder="Buscar lançamento…" />
@@ -84,6 +92,7 @@ const gruposFiltrados = computed(() => {
           <div class="tx-info">
             <div class="tx-title-row">
               <span class="tx-title">{{ t.desc }}</span>
+              <span v-if="contextName(t.context)" class="pill-tag" style="color:#6C63FF; background:rgba(108,99,255,0.14)">{{ contextName(t.context) }}</span>
               <span v-if="t.recurring" class="pill-tag" style="color:#D99400; background:rgba(255,184,0,0.14)">Recorrente</span>
             </div>
             <div class="tx-cat">{{ t.category }}<span v-if="bankName(t.bankAccountId)"> · {{ bankName(t.bankAccountId) }}</span><span v-if="t.notes"> · {{ t.notes }}</span></div>
@@ -115,6 +124,12 @@ const gruposFiltrados = computed(() => {
 
 .filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tab-group { background: var(--surface); border: 1px solid var(--border); }
+.conta-sel {
+  height: 38px; padding: 0 10px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 9px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text);
+  cursor: pointer; outline: none; max-width: 190px;
+}
+.conta-sel:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .search {
   margin-left: auto; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 13px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 9px; width: 240px;
@@ -153,5 +168,6 @@ const gruposFiltrados = computed(() => {
   .screen { padding: 16px; }
   .totals { grid-template-columns: 1fr; }
   .search { width: 100%; margin-left: 0; }
+  .conta-sel { max-width: none; flex: 1; }
 }
 </style>
